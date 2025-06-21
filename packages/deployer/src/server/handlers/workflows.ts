@@ -1,5 +1,4 @@
 import type { Mastra } from '@mastra/core';
-import type { RuntimeContext } from '@mastra/core/di';
 import {
   getWorkflowsHandler as getOriginalWorkflowsHandler,
   getWorkflowByIdHandler as getOriginalWorkflowByIdHandler,
@@ -11,6 +10,8 @@ import {
   resumeAsyncWorkflowHandler as getOriginalResumeAsyncWorkflowHandler,
   resumeWorkflowHandler as getOriginalResumeWorkflowHandler,
   getWorkflowRunsHandler as getOriginalGetWorkflowRunsHandler,
+  getWorkflowRunByIdHandler as getOriginalGetWorkflowRunByIdHandler,
+  getWorkflowRunExecutionResultHandler as getOriginalGetWorkflowRunExecutionResultHandler,
 } from '@mastra/server/handlers/workflows';
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -69,15 +70,14 @@ export async function createWorkflowRunHandler(c: Context) {
 export async function startAsyncWorkflowHandler(c: Context) {
   try {
     const mastra: Mastra = c.get('mastra');
+    const runtimeContext = c.get('runtimeContext');
     const workflowId = c.req.param('workflowId');
-    const runtimeContext: RuntimeContext = c.get('runtimeContext');
-    const { inputData, runtimeContext: runtimeContextFromRequest } = await c.req.json();
+    const { inputData } = await c.req.json();
     const runId = c.req.query('runId');
 
     const result = await getOriginalStartAsyncWorkflowHandler({
       mastra,
       runtimeContext,
-      runtimeContextFromRequest,
       workflowId,
       runId,
       inputData,
@@ -92,15 +92,14 @@ export async function startAsyncWorkflowHandler(c: Context) {
 export async function startWorkflowRunHandler(c: Context) {
   try {
     const mastra: Mastra = c.get('mastra');
+    const runtimeContext = c.get('runtimeContext');
     const workflowId = c.req.param('workflowId');
-    const runtimeContext: RuntimeContext = c.get('runtimeContext');
-    const { inputData, runtimeContext: runtimeContextFromRequest } = await c.req.json();
+    const { inputData } = await c.req.json();
     const runId = c.req.query('runId');
 
     await getOriginalStartWorkflowRunHandler({
       mastra,
       runtimeContext,
-      runtimeContextFromRequest,
       workflowId,
       runId,
       inputData,
@@ -122,6 +121,8 @@ export function watchWorkflowHandler(c: Context) {
     if (!runId) {
       throw new HTTPException(400, { message: 'runId required to watch workflow' });
     }
+
+    c.header('Transfer-Encoding', 'chunked');
 
     return stream(
       c,
@@ -159,23 +160,24 @@ export function watchWorkflowHandler(c: Context) {
 export async function streamWorkflowHandler(c: Context) {
   try {
     const mastra: Mastra = c.get('mastra');
+    const runtimeContext = c.get('runtimeContext');
     const logger = mastra.getLogger();
     const workflowId = c.req.param('workflowId');
-    const runtimeContext: RuntimeContext = c.get('runtimeContext');
-    const { inputData, runtimeContext: runtimeContextFromRequest } = await c.req.json();
+    const { inputData } = await c.req.json();
     const runId = c.req.query('runId');
+
+    c.header('Transfer-Encoding', 'chunked');
 
     return stream(
       c,
       async stream => {
         try {
-          const result = getOriginalStreamWorkflowHandler({
+          const result = await getOriginalStreamWorkflowHandler({
             mastra,
             workflowId,
             runId,
             inputData,
             runtimeContext,
-            runtimeContextFromRequest,
           });
 
           const reader = result.stream.getReader();
@@ -204,10 +206,10 @@ export async function streamWorkflowHandler(c: Context) {
 export async function resumeAsyncWorkflowHandler(c: Context) {
   try {
     const mastra: Mastra = c.get('mastra');
+    const runtimeContext = c.get('runtimeContext');
     const workflowId = c.req.param('workflowId');
     const runId = c.req.query('runId');
-    const runtimeContext: RuntimeContext = c.get('runtimeContext');
-    const { step, resumeData, runtimeContext: runtimeContextFromRequest } = await c.req.json();
+    const { step, resumeData } = await c.req.json();
 
     if (!runId) {
       throw new HTTPException(400, { message: 'runId required to resume workflow' });
@@ -216,7 +218,6 @@ export async function resumeAsyncWorkflowHandler(c: Context) {
     const result = await getOriginalResumeAsyncWorkflowHandler({
       mastra,
       runtimeContext,
-      runtimeContextFromRequest,
       workflowId,
       runId,
       body: { step, resumeData },
@@ -231,9 +232,10 @@ export async function resumeAsyncWorkflowHandler(c: Context) {
 export async function resumeWorkflowHandler(c: Context) {
   try {
     const mastra: Mastra = c.get('mastra');
+    const runtimeContext = c.get('runtimeContext');
     const workflowId = c.req.param('workflowId');
     const runId = c.req.query('runId');
-    const { step, resumeData, runtimeContext } = await c.req.json();
+    const { step, resumeData } = await c.req.json();
 
     if (!runId) {
       throw new HTTPException(400, { message: 'runId required to resume workflow' });
@@ -271,5 +273,39 @@ export async function getWorkflowRunsHandler(c: Context) {
     return c.json(workflowRuns);
   } catch (error) {
     return handleError(error, 'Error getting workflow runs');
+  }
+}
+
+export async function getWorkflowRunByIdHandler(c: Context) {
+  try {
+    const mastra: Mastra = c.get('mastra');
+    const workflowId = c.req.param('workflowId');
+    const runId = c.req.param('runId');
+    const workflowRun = await getOriginalGetWorkflowRunByIdHandler({
+      mastra,
+      workflowId,
+      runId,
+    });
+
+    return c.json(workflowRun);
+  } catch (error) {
+    return handleError(error, 'Error getting workflow run');
+  }
+}
+
+export async function getWorkflowRunExecutionResultHandler(c: Context) {
+  try {
+    const mastra: Mastra = c.get('mastra');
+    const workflowId = c.req.param('workflowId');
+    const runId = c.req.param('runId');
+    const workflowRunExecutionResult = await getOriginalGetWorkflowRunExecutionResultHandler({
+      mastra,
+      workflowId,
+      runId,
+    });
+
+    return c.json(workflowRunExecutionResult);
+  } catch (error) {
+    return handleError(error, 'Error getting workflow run execution result');
   }
 }
