@@ -1,6 +1,7 @@
-import type { MastraMessageV2 } from '../agent';
+import type { MastraMessageContentV2, MastraMessageV2 } from '../agent';
 import { MastraBase } from '../base';
 import type { MastraMessageV1, StorageThreadType } from '../memory/types';
+import type { Trace } from '../telemetry';
 import type { WorkflowRunState } from '../workflows';
 
 import {
@@ -9,10 +10,20 @@ import {
   TABLE_MESSAGES,
   TABLE_THREADS,
   TABLE_TRACES,
+  TABLE_RESOURCES,
   TABLE_SCHEMAS,
 } from './constants';
 import type { TABLE_NAMES } from './constants';
-import type { EvalRow, StorageColumn, StorageGetMessagesArg, WorkflowRun, WorkflowRuns } from './types';
+import type {
+  EvalRow,
+  PaginationInfo,
+  StorageColumn,
+  StorageGetMessagesArg,
+  StorageGetTracesArg,
+  StorageResourceType,
+  WorkflowRun,
+  WorkflowRuns,
+} from './types';
 
 export abstract class MastraStorage extends MastraBase {
   /** @deprecated import from { TABLE_WORKFLOW_SNAPSHOT } '@mastra/core/storage' instead */
@@ -36,9 +47,90 @@ export abstract class MastraStorage extends MastraBase {
     });
   }
 
+  public get supports(): {
+    selectByIncludeResourceScope: boolean;
+    resourceWorkingMemory: boolean;
+  } {
+    return {
+      selectByIncludeResourceScope: false,
+      resourceWorkingMemory: false,
+    };
+  }
+
+  protected ensureDate(date: Date | string | undefined): Date | undefined {
+    if (!date) return undefined;
+    return date instanceof Date ? date : new Date(date);
+  }
+
+  protected serializeDate(date: Date | string | undefined): string | undefined {
+    if (!date) return undefined;
+    const dateObj = this.ensureDate(date);
+    return dateObj?.toISOString();
+  }
+
+  /**
+   * Resolves limit for how many messages to fetch
+   *
+   * @param last The number of messages to fetch
+   * @param defaultLimit The default limit to use if last is not provided
+   * @returns The resolved limit
+   */
+  protected resolveMessageLimit({
+    last,
+    defaultLimit,
+  }: {
+    last: number | false | undefined;
+    defaultLimit: number;
+  }): number {
+    // TODO: Figure out consistent default limit for all stores as some stores use 40 and some use no limit (Number.MAX_SAFE_INTEGER)
+    if (typeof last === 'number') return Math.max(0, last);
+    if (last === false) return 0;
+    return defaultLimit;
+  }
+
+  protected getSqlType(type: StorageColumn['type']): string {
+    switch (type) {
+      case 'text':
+        return 'TEXT';
+      case 'timestamp':
+        return 'TIMESTAMP';
+      case 'integer':
+        return 'INTEGER';
+      case 'bigint':
+        return 'BIGINT';
+      case 'jsonb':
+        return 'JSONB';
+      default:
+        return 'TEXT';
+    }
+  }
+
+  protected getDefaultValue(type: StorageColumn['type']): string {
+    switch (type) {
+      case 'text':
+      case 'uuid':
+        return "DEFAULT ''";
+      case 'timestamp':
+        return "DEFAULT '1970-01-01 00:00:00'";
+      case 'integer':
+      case 'bigint':
+        return 'DEFAULT 0';
+      case 'jsonb':
+        return "DEFAULT '{}'";
+      default:
+        return "DEFAULT ''";
+    }
+  }
+
   abstract createTable({ tableName }: { tableName: TABLE_NAMES; schema: Record<string, StorageColumn> }): Promise<void>;
 
   abstract clearTable({ tableName }: { tableName: TABLE_NAMES }): Promise<void>;
+
+  abstract alterTable(args: {
+    tableName: TABLE_NAMES;
+    schema: Record<string, StorageColumn>;
+    ifNotExists: string[];
+  }): Promise<void>;
 
   abstract insert({ tableName, record }: { tableName: TABLE_NAMES; record: Record<string, any> }): Promise<void>;
 
@@ -74,6 +166,34 @@ export abstract class MastraStorage extends MastraBase {
 
   abstract deleteThread({ threadId }: { threadId: string }): Promise<void>;
 
+  async getResourceById(_: { resourceId: string }): Promise<StorageResourceType | null> {
+    throw new Error(
+      `Resource working memory is not supported by this storage adapter (${this.constructor.name}). ` +
+        `Supported storage adapters: LibSQL (@mastra/libsql), PostgreSQL (@mastra/pg), Upstash (@mastra/upstash). ` +
+        `To use per-resource working memory, switch to one of these supported storage adapters.`,
+    );
+  }
+
+  async saveResource(_: { resource: StorageResourceType }): Promise<StorageResourceType> {
+    throw new Error(
+      `Resource working memory is not supported by this storage adapter (${this.constructor.name}). ` +
+        `Supported storage adapters: LibSQL (@mastra/libsql), PostgreSQL (@mastra/pg), Upstash (@mastra/upstash). ` +
+        `To use per-resource working memory, switch to one of these supported storage adapters.`,
+    );
+  }
+
+  async updateResource(_: {
+    resourceId: string;
+    workingMemory?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<StorageResourceType> {
+    throw new Error(
+      `Resource working memory is not supported by this storage adapter (${this.constructor.name}). ` +
+        `Supported storage adapters: LibSQL (@mastra/libsql), PostgreSQL (@mastra/pg), Upstash (@mastra/upstash). ` +
+        `To use per-resource working memory, switch to one of these supported storage adapters.`,
+    );
+  }
+
   abstract getMessages(args: StorageGetMessagesArg & { format?: 'v1' }): Promise<MastraMessageV1[]>;
   abstract getMessages(args: StorageGetMessagesArg & { format: 'v2' }): Promise<MastraMessageV2[]>;
   abstract getMessages({
@@ -89,23 +209,15 @@ export abstract class MastraStorage extends MastraBase {
     args: { messages: MastraMessageV1[]; format?: undefined | 'v1' } | { messages: MastraMessageV2[]; format: 'v2' },
   ): Promise<MastraMessageV2[] | MastraMessageV1[]>;
 
-  abstract getTraces({
-    name,
-    scope,
-    page,
-    perPage,
-    attributes,
-    filters,
-  }: {
-    name?: string;
-    scope?: string;
-    page: number;
-    perPage: number;
-    attributes?: Record<string, string>;
-    filters?: Record<string, any>;
-    fromDate?: Date;
-    toDate?: Date;
-  }): Promise<any[]>;
+  abstract updateMessages(args: {
+    messages: Partial<Omit<MastraMessageV2, 'createdAt'>> &
+      {
+        id: string;
+        content?: { metadata?: MastraMessageContentV2['metadata']; content?: MastraMessageContentV2['content'] };
+      }[];
+  }): Promise<MastraMessageV2[]>;
+
+  abstract getTraces(args: StorageGetTracesArg): Promise<any[]>;
 
   async init(): Promise<void> {
     // to prevent race conditions, await any current init
@@ -113,7 +225,7 @@ export abstract class MastraStorage extends MastraBase {
       return;
     }
 
-    this.hasInitialized = Promise.all([
+    const tableCreationTasks = [
       this.createTable({
         tableName: TABLE_WORKFLOW_SNAPSHOT,
         schema: TABLE_SCHEMAS[TABLE_WORKFLOW_SNAPSHOT],
@@ -138,9 +250,27 @@ export abstract class MastraStorage extends MastraBase {
         tableName: TABLE_TRACES,
         schema: TABLE_SCHEMAS[TABLE_TRACES],
       }),
-    ]).then(() => true);
+    ];
+
+    // Only create resources table for storage adapters that support it
+    if (this.supports.resourceWorkingMemory) {
+      tableCreationTasks.push(
+        this.createTable({
+          tableName: TABLE_RESOURCES,
+          schema: TABLE_SCHEMAS[TABLE_RESOURCES],
+        }),
+      );
+    }
+
+    this.hasInitialized = Promise.all(tableCreationTasks).then(() => true);
 
     await this.hasInitialized;
+
+    await this?.alterTable?.({
+      tableName: TABLE_MESSAGES,
+      schema: TABLE_SCHEMAS[TABLE_MESSAGES],
+      ifNotExists: ['resourceId'],
+    });
   }
 
   async persistWorkflowSnapshot({
@@ -199,4 +329,16 @@ export abstract class MastraStorage extends MastraBase {
   }): Promise<WorkflowRuns>;
 
   abstract getWorkflowRunById(args: { runId: string; workflowName?: string }): Promise<WorkflowRun | null>;
+
+  abstract getTracesPaginated(args: StorageGetTracesArg): Promise<PaginationInfo & { traces: Trace[] }>;
+
+  abstract getThreadsByResourceIdPaginated(args: {
+    resourceId: string;
+    page: number;
+    perPage: number;
+  }): Promise<PaginationInfo & { threads: StorageThreadType[] }>;
+
+  abstract getMessagesPaginated(
+    args: StorageGetMessagesArg & { format?: 'v1' | 'v2' },
+  ): Promise<PaginationInfo & { messages: MastraMessageV1[] | MastraMessageV2[] }>;
 }

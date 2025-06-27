@@ -5,6 +5,7 @@ import type {
   QueryResult,
   StorageThreadType,
   WorkflowRuns,
+  WorkflowRun,
   LegacyWorkflowRuns,
 } from '@mastra/core';
 import type { AgentGenerateOptions, AgentStreamOptions, ToolsInput } from '@mastra/core/agent';
@@ -115,6 +116,10 @@ export type GetLegacyWorkflowRunsResponse = LegacyWorkflowRuns;
 
 export type GetWorkflowRunsResponse = WorkflowRuns;
 
+export type GetWorkflowRunByIdResponse = WorkflowRun;
+
+export type GetWorkflowRunExecutionResultResponse = WatchEvent['payload']['workflowState'];
+
 export type LegacyWorkflowRunResult = {
   activePaths: Record<string, { status: string; suspendPayload?: any; stepPath: string[] }>;
   results: CoreLegacyWorkflowRunResult<any, any, any>['results'];
@@ -178,6 +183,11 @@ export interface SaveMessageToMemoryParams {
   agentId: string;
 }
 
+export interface SaveNetworkMessageToMemoryParams {
+  messages: MastraMessageV1[];
+  networkId: string;
+}
+
 export type SaveMessageToMemoryResponse = MastraMessageV1[];
 
 export interface CreateMemoryThreadParams {
@@ -188,11 +198,24 @@ export interface CreateMemoryThreadParams {
   agentId: string;
 }
 
+export interface CreateNetworkMemoryThreadParams {
+  title?: string;
+  metadata?: Record<string, any>;
+  resourceId: string;
+  threadId?: string;
+  networkId: string;
+}
+
 export type CreateMemoryThreadResponse = StorageThreadType;
 
 export interface GetMemoryThreadParams {
   resourceId: string;
   agentId: string;
+}
+
+export interface GetNetworkMemoryThreadParams {
+  resourceId: string;
+  networkId: string;
 }
 
 export type GetMemoryThreadResponse = StorageThreadType[];
@@ -221,6 +244,8 @@ export interface GetLogsParams {
   toDate?: Date;
   logLevel?: LogLevel;
   filters?: Record<string, string>;
+  page?: number;
+  perPage?: number;
 }
 
 export interface GetLogParams {
@@ -230,9 +255,17 @@ export interface GetLogParams {
   toDate?: Date;
   logLevel?: LogLevel;
   filters?: Record<string, string>;
+  page?: number;
+  perPage?: number;
 }
 
-export type GetLogsResponse = BaseLogMessage[];
+export type GetLogsResponse = {
+  logs: BaseLogMessage[];
+  total: number;
+  page: number;
+  perPage: number;
+  hasMore: boolean;
+};
 
 export type RequestFunction = (path: string, options?: RequestOptions) => Promise<any>;
 
@@ -291,6 +324,7 @@ export interface GetTelemetryParams {
 }
 
 export interface GetNetworkResponse {
+  id: string;
   name: string;
   instructions: string;
   agents: Array<{
@@ -303,6 +337,59 @@ export interface GetNetworkResponse {
     modelId: string;
   };
   state?: Record<string, any>;
+}
+
+export interface GetVNextNetworkResponse {
+  id: string;
+  name: string;
+  instructions: string;
+  agents: Array<{
+    name: string;
+    provider: string;
+    modelId: string;
+  }>;
+  routingModel: {
+    provider: string;
+    modelId: string;
+  };
+  workflows: Array<{
+    name: string;
+    description: string;
+    inputSchema: string | undefined;
+    outputSchema: string | undefined;
+  }>;
+  tools: Array<{
+    id: string;
+    description: string;
+  }>;
+}
+
+export interface GenerateVNextNetworkResponse {
+  task: string;
+  result: string;
+  resourceId: string;
+  resourceType: 'none' | 'tool' | 'agent' | 'workflow';
+}
+
+export interface GenerateOrStreamVNextNetworkParams {
+  message: string;
+  threadId?: string;
+  resourceId?: string;
+}
+
+export interface LoopStreamVNextNetworkParams {
+  message: string;
+  threadId?: string;
+  resourceId?: string;
+  maxIterations?: number;
+}
+
+export interface LoopVNextNetworkResponse {
+  status: 'success';
+  result: {
+    text: string;
+  };
+  steps: WorkflowResult<any, any>['steps'];
 }
 
 export interface McpServerListResponse {

@@ -4,7 +4,13 @@ import { Badge, Icon, Txt, LegacyWorkflowTrigger, WorkflowIcon, WorkflowTrigger 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { WorkflowLogs } from './workflow-logs';
-import { useLegacyWorkflow, useWorkflow } from '@/hooks/use-workflows';
+import {
+  useLegacyWorkflow,
+  useWorkflow,
+  useExecuteWorkflow,
+  useResumeWorkflow,
+  useStreamWorkflow,
+} from '@/hooks/use-workflows';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CopyIcon } from 'lucide-react';
@@ -16,9 +22,12 @@ import { useWorkflowRuns } from '@/pages/workflows/workflow/hooks/use-workflow-r
 export function WorkflowInformation({ workflowId, isLegacy }: { workflowId: string; isLegacy?: boolean }) {
   const params = useParams();
   const navigate = useNavigate();
-  const { workflow, isLoading: isWorkflowLoading } = useWorkflow(workflowId, !isLegacy);
+  const { data: workflow, isLoading: isWorkflowLoading } = useWorkflow(workflowId, !isLegacy);
   const { isLoading: isRunsLoading, data: runs } = useWorkflowRuns({ workflowId });
-  const { legacyWorkflow, isLoading: isLegacyWorkflowLoading } = useLegacyWorkflow(workflowId, !!isLegacy);
+  const { data: legacyWorkflow, isLoading: isLegacyWorkflowLoading } = useLegacyWorkflow(workflowId, !!isLegacy);
+  const { createWorkflowRun } = useExecuteWorkflow();
+  const { resumeWorkflow } = useResumeWorkflow();
+  const { streamWorkflow, streamResult, isStreaming } = useStreamWorkflow();
 
   const [runId, setRunId] = useState<string>('');
   const { handleCopy } = useCopyToClipboard({ text: workflowId });
@@ -91,7 +100,18 @@ export function WorkflowInformation({ workflowId, isLegacy }: { workflowId: stri
                   {isLegacy ? (
                     <LegacyWorkflowTrigger workflowId={workflowId} setRunId={setRunId} />
                   ) : (
-                    <WorkflowTrigger workflowId={workflowId} setRunId={setRunId} />
+                    <WorkflowTrigger
+                      workflowId={workflowId}
+                      setRunId={setRunId}
+                      workflow={workflow}
+                      isLoading={isWorkflowLoading}
+                      createWorkflowRun={createWorkflowRun.mutateAsync}
+                      streamWorkflow={streamWorkflow.mutateAsync}
+                      resumeWorkflow={resumeWorkflow.mutateAsync}
+                      streamResult={streamResult}
+                      isStreamingWorkflow={isStreaming}
+                      isResumingWorkflow={resumeWorkflow.isPending}
+                    />
                   )}
                 </>
               ) : null}

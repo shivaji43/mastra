@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { convertToCoreMessages } from 'ai';
-import type { CoreMessage, CoreSystemMessage, IDGenerator, Message, ToolInvocation, UIMessage } from 'ai';
+import type { CoreMessage, CoreSystemMessage, IDGenerator, Message, ToolCallPart, ToolInvocation, UIMessage } from 'ai';
 import type { MastraMessageV1 } from '../../memory';
 import { isCoreMessage, isUiMessage } from '../../utils';
 import { convertToV1Messages } from './prompt/convert-to-mastra-v1';
@@ -15,6 +15,7 @@ export type MastraMessageContentV2 = {
   toolInvocations?: UIMessage['toolInvocations'];
   reasoning?: UIMessage['reasoning'];
   annotations?: UIMessage['annotations'];
+  metadata?: Record<string, unknown>;
 };
 
 export type MastraMessageV2 = {
@@ -27,7 +28,17 @@ export type MastraMessageV2 = {
   type?: string;
 };
 
-type MessageInput = UIMessage | Message | MastraMessageV1 | CoreMessage | MastraMessageV2;
+function isToolCallMessage(message: CoreMessage): boolean {
+  if (message.role === 'tool') {
+    return true;
+  }
+  if (message.role === 'assistant' && Array.isArray(message.content)) {
+    return message.content.some((part): part is ToolCallPart => part.type === 'tool-call');
+  }
+  return false;
+}
+
+export type MessageInput = UIMessage | Message | MastraMessageV1 | CoreMessage | MastraMessageV2;
 type MessageSource = 'memory' | 'response' | 'user' | 'system' | 'context';
 type MemoryInfo = { threadId: string; resourceId?: string };
 
@@ -61,6 +72,7 @@ export class MessageList {
   }
 
   public add(messages: string | string[] | MessageInput | MessageInput[], messageSource: MessageSource) {
+    if (!messages) return this;
     for (const message of Array.isArray(messages) ? messages : [messages]) {
       this.addOne(
         typeof message === `string`
@@ -94,7 +106,15 @@ export class MessageList {
     ui: () => this.messages.map(MessageList.toUIMessage),
     core: () => this.convertToCoreMessages(this.all.ui()),
     prompt: () => {
-      return [...this.systemMessages, ...Object.values(this.taggedSystemMessages).flat(), ...this.all.core()];
+      const coreMessages = this.all.core();
+
+      // Some LLM providers will throw an error if the first message is a tool call.
+      while (coreMessages[0] && isToolCallMessage(coreMessages[0])) {
+        coreMessages.shift();
+      }
+
+      const messages = [...this.systemMessages, ...Object.values(this.taggedSystemMessages).flat(), ...coreMessages];
+      return messages;
     },
   };
   private remembered = {
@@ -316,12 +336,16 @@ ${JSON.stringify(message, null, 2)}`,
     // If the last message is an assistant message and the new message is also an assistant message, merge them together and update tool calls with results
     const latestMessagePartType = latestMessage?.content?.parts?.filter(p => p.type !== `step-start`)?.at?.(-1)?.type;
     const newMessageFirstPartType = messageV2.content.parts.filter(p => p.type !== `step-start`).at(0)?.type;
-    const shouldAppendToLastAssistantMessage = latestMessage?.role === 'assistant' && messageV2.role === 'assistant';
+    const shouldAppendToLastAssistantMessage =
+      latestMessage?.role === 'assistant' &&
+      messageV2.role === 'assistant' &&
+      latestMessage.threadId === messageV2.threadId;
     const shouldAppendToLastAssistantMessageParts =
       shouldAppendToLastAssistantMessage &&
       newMessageFirstPartType &&
       ((newMessageFirstPartType === `tool-invocation` && latestMessagePartType !== `text`) ||
-        newMessageFirstPartType === latestMessagePartType);
+        (newMessageFirstPartType === latestMessagePartType &&
+          (!this.memoryMessages.has(latestMessage) || messageSource === 'memory')));
 
     if (
       // backwards compat check!
@@ -432,7 +456,15 @@ ${JSON.stringify(message, null, 2)}`,
   }
 
   private inputToMastraMessageV2(message: MessageInput, messageSource: MessageSource): MastraMessageV2 {
-    if (`threadId` in message && message.threadId && this.memoryInfo && message.threadId !== this.memoryInfo.threadId) {
+    if (
+      // we can't throw if the threadId doesn't match and this message came from memory
+      // this is because per-user semantic recall can retrieve messages from other threads
+      messageSource !== `memory` &&
+      `threadId` in message &&
+      message.threadId &&
+      this.memoryInfo &&
+      message.threadId !== this.memoryInfo.threadId
+    ) {
       throw new Error(
         `Received input message with wrong threadId. Input ${message.threadId}, expected ${this.memoryInfo.threadId}`,
       );

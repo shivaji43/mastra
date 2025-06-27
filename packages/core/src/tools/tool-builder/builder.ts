@@ -11,6 +11,7 @@ import {
 import type { ToolExecutionOptions } from 'ai';
 import { z } from 'zod';
 import { MastraBase } from '../../base';
+import { ErrorCategory, MastraError, ErrorDomain } from '../../error';
 import { RuntimeContext } from '../../runtime-context';
 import { isVercelTool } from '../../tools/toolchecks';
 import type { ToolOptions } from '../../utils';
@@ -51,6 +52,11 @@ export class CoreToolBuilder extends MastraBase {
     return this.originalTool.inputSchema ?? z.object({});
   };
 
+  private getOutputSchema = () => {
+    if ('outputSchema' in this.originalTool) return this.originalTool.outputSchema;
+    return null;
+  };
+
   // For provider-defined tools, we need to include all required properties
   private buildProviderTool(tool: ToolToConvert): (CoreTool & { id: `${string}.${string}` }) | undefined {
     if (
@@ -60,12 +66,15 @@ export class CoreToolBuilder extends MastraBase {
       typeof tool.id === 'string' &&
       tool.id.includes('.')
     ) {
+      const parameters = this.getParameters();
+      const outputSchema = this.getOutputSchema();
       return {
         type: 'provider-defined' as const,
         id: tool.id,
         args: ('args' in this.originalTool ? this.originalTool.args : {}) as Record<string, unknown>,
         description: tool.description,
-        parameters: convertZodSchemaToAISDKSchema(this.getParameters()),
+        parameters: convertZodSchemaToAISDKSchema(parameters),
+        ...(outputSchema ? { outputSchema: convertZodSchemaToAISDKSchema(outputSchema) } : {}),
         execute: this.originalTool.execute
           ? this.createExecute(
               this.originalTool,
@@ -129,12 +138,27 @@ export class CoreToolBuilder extends MastraBase {
     };
 
     return async (args: any, execOptions?: any) => {
+      let logger = options.logger || this.logger;
       try {
-        (options.logger || this.logger).debug(start, { ...rest, args });
+        logger.debug(start, { ...rest, args });
         return await execFunction(args, execOptions);
       } catch (err) {
-        (options.logger || this.logger).error(error, { ...rest, error: err, args });
-        throw err;
+        const mastraError = new MastraError(
+          {
+            id: 'TOOL_EXECUTION_FAILED',
+            domain: ErrorDomain.TOOL,
+            category: ErrorCategory.USER,
+            details: {
+              error,
+              args,
+              model: rest.model?.modelId ?? '',
+            },
+          },
+          err,
+        );
+        logger.trackException(mastraError);
+        logger.error(error, { ...rest, error: mastraError, args });
+        throw mastraError;
       }
     };
   }
@@ -149,6 +173,7 @@ export class CoreToolBuilder extends MastraBase {
       type: 'function' as const,
       description: this.originalTool.description,
       parameters: this.getParameters(),
+      outputSchema: this.getOutputSchema(),
       execute: this.originalTool.execute
         ? this.createExecute(
             this.originalTool,
@@ -179,9 +204,20 @@ export class CoreToolBuilder extends MastraBase {
       mode: 'aiSdkSchema',
     });
 
+    let processedOutputSchema;
+
+    if (this.getOutputSchema()) {
+      processedOutputSchema = applyCompatLayer({
+        schema: this.getOutputSchema(),
+        compatLayers: schemaCompatLayers,
+        mode: 'aiSdkSchema',
+      });
+    }
+
     return {
       ...definition,
       parameters: processedSchema,
+      outputSchema: processedOutputSchema,
     };
   }
 }

@@ -1,8 +1,8 @@
-import type { WorkflowRunState, StepResult } from '@mastra/core';
+import type { WorkflowRunState, StepResult } from '@mastra/core/workflows';
 
-import { ExtendedWorkflowWatchResult } from '@/hooks/use-workflows';
+import { WorkflowWatchResult } from '@mastra/client-js';
 
-export function convertWorkflowRunStateToWatchResult(runState: WorkflowRunState): ExtendedWorkflowWatchResult {
+export function convertWorkflowRunStateToWatchResult(runState: WorkflowRunState): WorkflowWatchResult {
   const runId = runState.runId;
   // Extract step information from the context
   const steps: Record<string, any> = {};
@@ -35,7 +35,7 @@ export function convertWorkflowRunStateToWatchResult(runState: WorkflowRunState)
       workflowState: {
         status,
         steps,
-        output: runState.value,
+        result: runState.value,
         payload: context.input,
         error: undefined,
       },

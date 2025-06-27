@@ -33,7 +33,13 @@ import type {
   McpServerListResponse,
   McpServerToolListResponse,
   GetLegacyWorkflowResponse,
+  GetVNextNetworkResponse,
+  GetNetworkMemoryThreadParams,
+  CreateNetworkMemoryThreadParams,
+  SaveNetworkMessageToMemoryParams,
 } from './types';
+import { VNextNetwork } from './resources/vNextNetwork';
+import { NetworkMemoryThread } from './resources/network-memory-thread';
 
 export class MastraClient extends BaseResource {
   constructor(options: ClientOptions) {
@@ -124,6 +130,53 @@ export class MastraClient extends BaseResource {
   }
 
   /**
+   * Retrieves memory threads for a resource
+   * @param params - Parameters containing the resource ID
+   * @returns Promise containing array of memory threads
+   */
+  public getNetworkMemoryThreads(params: GetNetworkMemoryThreadParams): Promise<GetMemoryThreadResponse> {
+    return this.request(`/api/memory/network/threads?resourceid=${params.resourceId}&networkId=${params.networkId}`);
+  }
+
+  /**
+   * Creates a new memory thread
+   * @param params - Parameters for creating the memory thread
+   * @returns Promise containing the created memory thread
+   */
+  public createNetworkMemoryThread(params: CreateNetworkMemoryThreadParams): Promise<CreateMemoryThreadResponse> {
+    return this.request(`/api/memory/network/threads?networkId=${params.networkId}`, { method: 'POST', body: params });
+  }
+
+  /**
+   * Gets a memory thread instance by ID
+   * @param threadId - ID of the memory thread to retrieve
+   * @returns MemoryThread instance
+   */
+  public getNetworkMemoryThread(threadId: string, networkId: string) {
+    return new NetworkMemoryThread(this.options, threadId, networkId);
+  }
+
+  /**
+   * Saves messages to memory
+   * @param params - Parameters containing messages to save
+   * @returns Promise containing the saved messages
+   */
+  public saveNetworkMessageToMemory(params: SaveNetworkMessageToMemoryParams): Promise<SaveMessageToMemoryResponse> {
+    return this.request(`/api/memory/network/save-messages?networkId=${params.networkId}`, {
+      method: 'POST',
+      body: params,
+    });
+  }
+
+  /**
+   * Gets the status of the memory system
+   * @returns Promise containing memory system status
+   */
+  public getNetworkMemoryStatus(networkId: string): Promise<{ result: boolean }> {
+    return this.request(`/api/memory/network/status?networkId=${networkId}`);
+  }
+
+  /**
    * Retrieves all available tools
    * @returns Promise containing map of tool IDs to tool details
    */
@@ -189,7 +242,7 @@ export class MastraClient extends BaseResource {
    * @returns Promise containing array of log messages
    */
   public getLogs(params: GetLogsParams): Promise<GetLogsResponse> {
-    const { transportId, fromDate, toDate, logLevel, filters } = params;
+    const { transportId, fromDate, toDate, logLevel, filters, page, perPage } = params;
     const _filters = filters ? Object.entries(filters).map(([key, value]) => `${key}:${value}`) : [];
 
     const searchParams = new URLSearchParams();
@@ -204,6 +257,12 @@ export class MastraClient extends BaseResource {
     }
     if (logLevel) {
       searchParams.set('logLevel', logLevel);
+    }
+    if (page) {
+      searchParams.set('page', String(page));
+    }
+    if (perPage) {
+      searchParams.set('perPage', String(perPage));
     }
     if (_filters) {
       if (Array.isArray(_filters)) {
@@ -228,7 +287,7 @@ export class MastraClient extends BaseResource {
    * @returns Promise containing array of log messages
    */
   public getLogForRun(params: GetLogParams): Promise<GetLogsResponse> {
-    const { runId, transportId, fromDate, toDate, logLevel, filters } = params;
+    const { runId, transportId, fromDate, toDate, logLevel, filters, page, perPage } = params;
 
     const _filters = filters ? Object.entries(filters).map(([key, value]) => `${key}:${value}`) : [];
     const searchParams = new URLSearchParams();
@@ -246,6 +305,12 @@ export class MastraClient extends BaseResource {
     }
     if (logLevel) {
       searchParams.set('logLevel', logLevel);
+    }
+    if (page) {
+      searchParams.set('page', String(page));
+    }
+    if (perPage) {
+      searchParams.set('perPage', String(perPage));
     }
 
     if (_filters) {
@@ -322,8 +387,16 @@ export class MastraClient extends BaseResource {
    * Retrieves all available networks
    * @returns Promise containing map of network IDs to network details
    */
-  public getNetworks(): Promise<Record<string, GetNetworkResponse>> {
+  public getNetworks(): Promise<Array<GetNetworkResponse>> {
     return this.request('/api/networks');
+  }
+
+  /**
+   * Retrieves all available vNext networks
+   * @returns Promise containing map of vNext network IDs to vNext network details
+   */
+  public getVNextNetworks(): Promise<Array<GetVNextNetworkResponse>> {
+    return this.request('/api/networks/v-next');
   }
 
   /**
@@ -333,6 +406,15 @@ export class MastraClient extends BaseResource {
    */
   public getNetwork(networkId: string) {
     return new Network(this.options, networkId);
+  }
+
+  /**
+   * Gets a vNext network instance by ID
+   * @param networkId - ID of the vNext network to retrieve
+   * @returns vNext Network instance
+   */
+  public getVNextNetwork(networkId: string) {
+    return new VNextNetwork(this.options, networkId);
   }
 
   /**

@@ -307,6 +307,67 @@ export default withGT(
         permanent: true,
       },
       {
+        source: "/docs/local-dev/creating-a-new-project",
+        destination: "/docs/getting-started/installation",
+        permanent: true,
+      },
+      {
+        source: "/docs/local-dev/add-to-existing-project",
+        destination:
+          "/docs/getting-started/installation#add-to-an-existing-project",
+        permanent: true,
+      },
+      {
+        source: "/docs/deployment/deployment",
+        destination: "/docs/deployment/serverless-platforms",
+        permanent: true,
+      },
+      {
+        source: "/docs/deployment/client",
+        destination: "/docs/client-js/overview",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/express",
+        destination: "/docs/frameworks/servers/express",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/vite-react",
+        destination: "/docs/frameworks/web-frameworks/vite-react",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/next-js",
+        destination: "/docs/frameworks/web-frameworks/next-js",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/astro",
+        destination: "/docs/frameworks/web-frameworks/astro",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/ai-sdk",
+        destination: "/docs/frameworks/agentic-uis/ai-sdk",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/copilotkit",
+        destination: "/docs/frameworks/agentic-uis/copilotkit",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/assistant-ui",
+        destination: "/docs/frameworks/agentic-uis/assistant-ui",
+        permanent: true,
+      },
+      {
+        source: "/docs/frameworks/openrouter",
+        destination: "/docs/frameworks/agentic-uis/openrouter",
+        permanent: true,
+      },
+      {
         source: "/docs/frameworks/01-next-js",
         destination: "/docs/frameworks/next-js",
         permanent: true,
@@ -905,10 +966,18 @@ export default withGT(
       {
         source: "/:locale/docs/workflows-vnext/overview",
         destination: "/:locale/docs/workflows/overview",
+        permanent: true,
       },
       {
         source: "/:locale/reference/rag/vector-search",
         destination: "/:locale/examples/rag/query/hybrid-vector-search",
+        permanent: true,
+      },
+
+      // redirect overview pages
+      {
+        source: "/:locale/docs/frameworks/agentic-uis",
+        destination: "/:locale/docs/frameworks/agentic-uis/ai-sdk",
         permanent: true,
       },
     ],

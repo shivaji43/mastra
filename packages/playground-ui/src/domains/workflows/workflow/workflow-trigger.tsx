@@ -12,39 +12,79 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 
-import {
-  useExecuteWorkflow,
-  useWatchWorkflow,
-  useResumeWorkflow,
-  useWorkflow,
-  ExtendedWorkflowWatchResult,
-} from '@/hooks/use-workflows';
 import { WorkflowRunContext } from '../context/workflow-run-context';
 import { toast } from 'sonner';
 import { usePlaygroundStore } from '@/store/playground-store';
 import { Icon } from '@/ds/icons';
 import { Txt } from '@/ds/components/Txt';
 
-import { GetWorkflowResponse } from '@mastra/client-js';
+import { GetWorkflowResponse, WorkflowWatchResult } from '@mastra/client-js';
 import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogPortal, DialogTitle, DialogContent } from '@/components/ui/dialog';
-import { WorkflowCard } from './workflow-card';
 
 interface SuspendedStep {
   stepId: string;
   runId: string;
   suspendPayload: any;
+  workflow?: GetWorkflowResponse;
+  isLoading: boolean;
 }
 
-export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; setRunId?: (runId: string) => void }) {
+interface WorkflowTriggerProps {
+  workflowId: string;
+  setRunId?: (runId: string) => void;
+  workflow?: GetWorkflowResponse;
+  isLoading?: boolean;
+  createWorkflowRun: ({ workflowId, prevRunId }: { workflowId: string; prevRunId?: string }) => Promise<{
+    runId: string;
+  }>;
+  isStreamingWorkflow: boolean;
+  streamWorkflow: ({
+    workflowId,
+    runId,
+    inputData,
+    runtimeContext,
+  }: {
+    workflowId: string;
+    runId: string;
+    inputData: Record<string, unknown>;
+    runtimeContext: Record<string, unknown>;
+  }) => Promise<void>;
+  resumeWorkflow: ({
+    workflowId,
+    step,
+    runId,
+    resumeData,
+    runtimeContext,
+  }: {
+    workflowId: string;
+    step: string | string[];
+    runId: string;
+    resumeData: Record<string, unknown>;
+    runtimeContext: Record<string, unknown>;
+  }) => Promise<{
+    message: string;
+  }>;
+  streamResult: WorkflowWatchResult | null;
+  isResumingWorkflow: boolean;
+}
+
+export function WorkflowTrigger({
+  workflowId,
+  setRunId,
+  workflow,
+  isLoading,
+  createWorkflowRun,
+  resumeWorkflow,
+  streamWorkflow,
+  isStreamingWorkflow,
+  streamResult,
+  isResumingWorkflow,
+}: WorkflowTriggerProps) {
   const { runtimeContext } = usePlaygroundStore();
   const { result, setResult, payload, setPayload } = useContext(WorkflowRunContext);
-  const { isLoading, workflow } = useWorkflow(workflowId);
 
-  const { createWorkflowRun, startWorkflowRun } = useExecuteWorkflow();
-  const { watchWorkflow, watchResult, isWatchingWorkflow } = useWatchWorkflow();
-  const { resumeWorkflow, isResumingWorkflow } = useResumeWorkflow();
   const [suspendedSteps, setSuspendedSteps] = useState<SuspendedStep[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const triggerSchema = workflow?.inputSchema;
@@ -60,9 +100,7 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
 
       setRunId?.(runId);
 
-      watchWorkflow({ workflowId, runId });
-
-      startWorkflowRun({ workflowId, runId, input: data, runtimeContext });
+      streamWorkflow({ workflowId, runId, inputData: data, runtimeContext });
     } catch (err) {
       setIsRunning(false);
       toast.error('Error executing workflow');
@@ -76,8 +114,6 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
 
     const { runId } = await createWorkflowRun({ workflowId, prevRunId });
 
-    watchWorkflow({ workflowId, runId });
-
     await resumeWorkflow({
       step: stepId,
       runId,
@@ -87,30 +123,31 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
     });
   };
 
-  const watchResultToUse = result ?? watchResult;
+  const streamResultToUse = result ?? streamResult;
 
   useEffect(() => {
-    setIsRunning(isWatchingWorkflow);
-  }, [isWatchingWorkflow]);
+    setIsRunning(isStreamingWorkflow);
+  }, [isStreamingWorkflow]);
 
   useEffect(() => {
-    if (!watchResultToUse?.payload?.workflowState?.steps || !result?.runId) return;
+    if (!streamResultToUse?.payload?.workflowState?.steps || !result?.runId) return;
 
-    const suspended = Object.entries(watchResultToUse.payload.workflowState.steps)
+    const suspended = Object.entries(streamResultToUse.payload.workflowState.steps)
       .filter(([_, { status }]) => status === 'suspended')
       .map(([stepId, { payload }]) => ({
         stepId,
         runId: result.runId,
         suspendPayload: payload,
+        isLoading: false,
       }));
     setSuspendedSteps(suspended);
-  }, [watchResultToUse, result]);
+  }, [streamResultToUse, result]);
 
   useEffect(() => {
-    if (watchResult) {
-      setResult(watchResult);
+    if (streamResult) {
+      setResult(streamResult);
     }
-  }, [watchResult]);
+  }, [streamResult]);
 
   if (isLoading) {
     return (
@@ -128,12 +165,11 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
   const isSuspendedSteps = suspendedSteps.length > 0;
 
   const zodInputSchema = triggerSchema ? resolveSerializedZodOutput(jsonSchemaToZod(parse(triggerSchema))) : null;
-  const { sanitizedOutput, ...restResult } = result || {};
 
   return (
     <div className="h-full pt-3 pb-12">
       <div className="space-y-4 px-5 pb-5 border-b-sm border-border1">
-        {isResumingWorkflow && (
+        {(isResumingWorkflow || (isSuspendedSteps && isStreamingWorkflow)) && (
           <div className="py-2 px-5 flex items-center gap-2 bg-surface5 -mx-5 -mt-5 border-b-sm border-border1">
             <Icon>
               <Loader2 className="animate-spin text-icon6" />
@@ -148,7 +184,7 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
               <DynamicForm
                 schema={zodInputSchema}
                 defaultValues={payload}
-                isSubmitLoading={isWatchingWorkflow}
+                isSubmitLoading={isStreamingWorkflow}
                 submitButtonLabel="Run"
                 onSubmit={data => {
                   setPayload(data);
@@ -174,7 +210,7 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
           </>
         )}
 
-        {!isWatchingWorkflow &&
+        {!isStreamingWorkflow &&
           isSuspendedSteps &&
           suspendedSteps?.map(step => {
             const stepDefinition = workflow.steps[step.stepId];
@@ -205,6 +241,7 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
                       runId: step.runId,
                       suspendPayload: step.suspendPayload,
                       resumeData: data,
+                      isLoading: false,
                     });
                   }}
                 />
@@ -212,45 +249,26 @@ export function WorkflowTrigger({ workflowId, setRunId }: { workflowId: string; 
             );
           })}
       </div>
-
       {result && (
         <div className="p-5 border-b-sm border-border1">
-          <WorkflowJsonDialog result={restResult} />
+          <WorkflowJsonDialog result={result} />
         </div>
       )}
-      {result && <WorkflowResultSection result={result} workflow={workflow} />}
     </div>
   );
 }
 
 interface WorkflowResultSectionProps {
-  result: ExtendedWorkflowWatchResult;
+  result: WorkflowWatchResult;
   workflow: GetWorkflowResponse;
 }
 
 const WorkflowResultSection = ({ result, workflow }: WorkflowResultSectionProps) => {
-  const workflowState = result.payload.workflowState as ExtendedWorkflowWatchResult['payload']['workflowState'] & {
+  const workflowState = result.payload.workflowState as WorkflowWatchResult['payload']['workflowState'] & {
     result: unknown | null;
   };
 
-  if (
-    typeof workflowState.result === 'string' ||
-    typeof workflowState.result === 'number' ||
-    typeof workflowState.result === 'boolean'
-  ) {
-    return (
-      <div className="flex flex-col gap-1 p-5">
-        <div className="flex items-center gap-2">
-          <Txt as="label" htmlFor="string-result" variant="ui-sm" className="text-icon3">
-            Workflow Result
-          </Txt>
-        </div>
-        <Input id="string-result" defaultValue={String(workflowState.result)} />
-      </div>
-    );
-  }
-
-  const hasResult = Object.keys(workflowState.result || {}).length > 0;
+  const hasResult = Object.keys(workflowState.steps || {}).length > 0;
   if (!hasResult) return null;
 
   return (
@@ -259,14 +277,16 @@ const WorkflowResultSection = ({ result, workflow }: WorkflowResultSectionProps)
         Final Output
       </Txt>
       <ul className="pt-4">
-        {Object.entries(workflowState.result || {}).map(([stepId, stepResult]) => {
+        {Object.entries(workflowState.steps || {}).map(([stepId, stepResult]) => {
           const stepDefinition = workflow.steps[stepId];
+          if (!stepDefinition) return null;
+
           return (
             <li
               key={stepId}
               className="border-b-sm border-dashed border-border1 last:border-b-0 py-4 first:pt-0 last:pb-0"
             >
-              <WorkflowResultFinishedStep stepResult={stepResult} stepDefinition={stepDefinition} />
+              <WorkflowResultFinishedStep stepResult={stepResult.output} stepDefinition={stepDefinition} />
             </li>
           );
         })}
@@ -295,10 +315,10 @@ const WorkflowResultFinishedStep = ({ stepResult, stepDefinition }: WorkflowResu
             </Icon>
 
             <Txt as="label" htmlFor={id} variant="ui-sm" className="text-icon3">
-              {stepDefinition.description}
+              {stepDefinition.description || stepDefinition.id}
             </Txt>
           </div>
-          <Input id={id} defaultValue={stepResult as string} />
+          <Input id={id} defaultValue={stepResult as string} readOnly />
         </div>
       );
     }
@@ -310,10 +330,15 @@ const WorkflowResultFinishedStep = ({ stepResult, stepDefinition }: WorkflowResu
             <Footprints className="text-icon3" />
           </Icon>
           <Txt variant="ui-sm" className="text-icon3">
-            {stepDefinition.description}
+            {stepDefinition.description || stepDefinition.id}
           </Txt>
         </div>
-        <DynamicForm schema={zodObjectSchema} defaultValues={stepResult as Record<string, unknown>} />
+        <DynamicForm
+          key={JSON.stringify(stepResult)}
+          schema={zodObjectSchema}
+          defaultValues={stepResult as Record<string, unknown>}
+          readOnly
+        />
       </div>
     );
   } catch (err: unknown) {

@@ -1,12 +1,11 @@
 const meta = {
-  "ai-sdk": "With Vercel AI SDK",
-  "vite-react": "With Vite/React",
-  "next-js": "With Next.js",
-  astro: "With Astro",
-  express: "With Express",
-  copilotkit: "With CopilotKit",
-  "assistant-ui": "With Assistant UI",
-  openrouter: "With OpenRouter",
+  "agentic-uis": {
+    title: "Agentic UIs",
+    href: "/docs/frameworks/agentic-uis/ai-sdk",
+  },
+  servers: "Servers",
+  "web-frameworks": "Web Frameworks",
+  "ai-sdk-v5": "AI SDK v5 (beta)",
 };
 
 export default meta;

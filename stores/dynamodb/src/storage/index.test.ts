@@ -11,6 +11,7 @@ import {
   waitUntilTableExists,
   waitUntilTableNotExists,
 } from '@aws-sdk/client-dynamodb';
+import { createSampleMessageV2, createSampleThread } from '@internal/storage-test-utils';
 import type { MastraMessageV1, StorageThreadType, WorkflowRun, WorkflowRunState } from '@mastra/core';
 import type { MastraMessageV2 } from '@mastra/core/agent';
 import { TABLE_EVALS, TABLE_THREADS, TABLE_WORKFLOW_SNAPSHOT } from '@mastra/core/storage';
@@ -325,6 +326,7 @@ describe('DynamoDBStore Integration Tests', () => {
           suspendedPaths: { test: [1] },
           runId: 'test-run-large', // Use unique runId
           timestamp: now,
+          status: 'success',
         };
 
         await expect(
@@ -442,6 +444,43 @@ describe('DynamoDBStore Integration Tests', () => {
         expect(last3).toHaveLength(3);
         expect(last3.map(m => m.content)).toEqual(['msg-7', 'msg-8', 'msg-9']);
       });
+
+      test('should update thread updatedAt when a message is saved to it', async () => {
+        const thread: StorageThreadType = {
+          id: 'thread-update-test',
+          resourceId: 'resource-update',
+          title: 'Update Test Thread',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          metadata: { test: true },
+        };
+        await store.saveThread({ thread });
+
+        // Get the initial thread to capture the original updatedAt
+        const initialThread = await store.getThreadById({ threadId: thread.id });
+        expect(initialThread).toBeDefined();
+        const originalUpdatedAt = initialThread!.updatedAt;
+
+        // Wait a small amount to ensure different timestamp
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Create and save a message to the thread
+        const message: MastraMessageV1 = {
+          id: 'msg-update-test',
+          threadId: thread.id,
+          resourceId: 'resource-update',
+          content: 'Test message for update',
+          createdAt: new Date(),
+          role: 'user',
+          type: 'text',
+        };
+        await store.saveMessages({ messages: [message] });
+
+        // Retrieve the thread again and check that updatedAt was updated
+        const updatedThread = await store.getThreadById({ threadId: thread.id });
+        expect(updatedThread).toBeDefined();
+        expect(updatedThread!.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+      });
     });
 
     describe('Batch Operations', () => {
@@ -517,6 +556,82 @@ describe('DynamoDBStore Integration Tests', () => {
         expect(retrieved[0]?.content).toBe('Large Message 0');
         expect(retrieved[29]?.content).toBe('Large Message 29');
       });
+
+      test('should upsert messages: duplicate id+threadId results in update, not duplicate row', async () => {
+        const thread = await createSampleThread();
+        await store.saveThread({ thread });
+        const baseMessage = createSampleMessageV2({
+          threadId: thread.id,
+          createdAt: new Date(),
+          content: { content: 'Original' },
+          resourceId: thread.resourceId,
+        });
+
+        // Insert the message for the first time
+        await store.saveMessages({ messages: [baseMessage], format: 'v2' });
+
+        // // Insert again with the same id and threadId but different content
+        const updatedMessage = {
+          ...createSampleMessageV2({
+            threadId: thread.id,
+            createdAt: new Date(),
+            content: { content: 'Updated' },
+            resourceId: thread.resourceId,
+          }),
+          id: baseMessage.id,
+        };
+
+        await store.saveMessages({ messages: [updatedMessage], format: 'v2' });
+
+        // Retrieve messages for the thread
+        const retrievedMessages = await store.getMessages({ threadId: thread.id, format: 'v2' });
+
+        // Only one message should exist for that id+threadId
+        expect(retrievedMessages.filter(m => m.id === baseMessage.id)).toHaveLength(1);
+
+        // The content should be the updated one
+        expect(retrievedMessages.find(m => m.id === baseMessage.id)?.content.content).toBe('Updated');
+      });
+
+      test('should upsert messages: duplicate id and different threadid', async () => {
+        const thread1 = await createSampleThread();
+        const thread2 = await createSampleThread();
+        await store.saveThread({ thread: thread1 });
+        await store.saveThread({ thread: thread2 });
+
+        const message = createSampleMessageV2({
+          threadId: thread1.id,
+          createdAt: new Date(),
+          content: { content: 'Thread1 Content' },
+          resourceId: thread1.resourceId,
+        });
+
+        // Insert message into thread1
+        await store.saveMessages({ messages: [message], format: 'v2' });
+
+        // Attempt to insert a message with the same id but different threadId
+        const conflictingMessage = {
+          ...createSampleMessageV2({
+            threadId: thread2.id, // different thread
+            content: { content: 'Thread2 Content' },
+            resourceId: thread2.resourceId,
+          }),
+          id: message.id,
+        };
+
+        // Save should save the message to the new thread
+        await store.saveMessages({ messages: [conflictingMessage], format: 'v2' });
+
+        // Retrieve messages for both threads
+        const thread1Messages = await store.getMessages({ threadId: thread1.id, format: 'v2' });
+        const thread2Messages = await store.getMessages({ threadId: thread2.id, format: 'v2' });
+
+        // Thread 1 should NOT have the message with that id
+        expect(thread1Messages.find(m => m.id === message.id)).toBeUndefined();
+
+        // Thread 2 should have the message with that id
+        expect(thread2Messages.find(m => m.id === message.id)?.content.content).toBe('Thread2 Content');
+      });
     });
 
     describe('Single-Table Design', () => {
@@ -547,6 +662,7 @@ describe('DynamoDBStore Integration Tests', () => {
           suspendedPaths: { test: [1] },
           runId: 'mixed-run',
           timestamp: Date.now(),
+          status: 'success',
         };
         await store.persistWorkflowSnapshot({ workflowName, runId: 'mixed-run', snapshot: workflowSnapshot });
 
@@ -861,6 +977,7 @@ describe('DynamoDBStore Integration Tests', () => {
         suspendedPaths: {},
         runId: runId,
         timestamp: createdAt.getTime(),
+        status: 'success',
         ...(resourceId && { resourceId: resourceId }), // Conditionally add resourceId to snapshot
       };
       return {
@@ -899,6 +1016,53 @@ describe('DynamoDBStore Integration Tests', () => {
       expect(loadedSnapshot?.runId).toEqual(snapshot.runId);
       expect(loadedSnapshot?.value).toEqual(snapshot.value);
       expect(loadedSnapshot?.context).toEqual(snapshot.context);
+    });
+
+    test('should allow updating an existing workflow snapshot', async () => {
+      const wfName = 'update-test-wf';
+      const runId = `run-${randomUUID()}`;
+
+      // Create initial snapshot
+      const { snapshot: initialSnapshot } = sampleWorkflowSnapshot(wfName, runId);
+
+      await expect(
+        store.persistWorkflowSnapshot({
+          workflowName: wfName,
+          runId: runId,
+          snapshot: initialSnapshot,
+        }),
+      ).resolves.not.toThrow();
+
+      // Create updated snapshot with different data
+      const updatedSnapshot: WorkflowRunState = {
+        ...initialSnapshot,
+        value: { currentState: 'completed' },
+        context: {
+          step1: { status: 'success', output: { data: 'updated-test' } },
+          step2: { status: 'success', output: { data: 'new-step' } },
+          input: { source: 'updated-test' },
+        } as unknown as WorkflowRunState['context'],
+        timestamp: Date.now(),
+      };
+
+      // This should succeed (update existing snapshot)
+      await expect(
+        store.persistWorkflowSnapshot({
+          workflowName: wfName,
+          runId: runId,
+          snapshot: updatedSnapshot,
+        }),
+      ).resolves.not.toThrow();
+
+      // Verify the snapshot was updated
+      const loadedSnapshot = await store.loadWorkflowSnapshot({
+        workflowName: wfName,
+        runId: runId,
+      });
+
+      expect(loadedSnapshot?.runId).toEqual(updatedSnapshot.runId);
+      expect(loadedSnapshot?.value).toEqual(updatedSnapshot.value);
+      expect(loadedSnapshot?.context).toEqual(updatedSnapshot.context);
     });
 
     test('getWorkflowRunById should retrieve correct run', async () => {
@@ -1199,4 +1363,4 @@ describe('DynamoDBStore Integration Tests', () => {
       ).toBeNull();
     });
   }); // End Generic Storage Methods describe
-}); // End Main Describe
+});

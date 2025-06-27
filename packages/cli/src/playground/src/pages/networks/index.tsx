@@ -1,21 +1,50 @@
-import { AgentNetworkCoinIcon, Button, DataTable, EmptyState, Header, HeaderTitle, Icon } from '@mastra/playground-ui';
-import { useNetworks } from '@/hooks/use-networks';
+import {
+  AgentNetworkCoinIcon,
+  Button,
+  DataTable,
+  EmptyState,
+  Header,
+  HeaderTitle,
+  Icon,
+  MainContentLayout,
+  MainContentContent,
+} from '@mastra/playground-ui';
+import { useNetworks, useVNextNetworks } from '@/hooks/use-networks';
+
 import { networksTableColumns } from '@/domains/networks/table.columns';
 import { NetworkIcon } from 'lucide-react';
 
 function Networks() {
   const { networks, isLoading } = useNetworks();
+  const { vNextNetworks, isLoading: isVNextLoading } = useVNextNetworks();
 
-  if (isLoading) return null;
+  if (isLoading || isVNextLoading) return null;
+
+  const allNetworks = [
+    ...(networks?.map(network => ({
+      ...network,
+      routingModel: network.routingModel.modelId,
+      agentsSize: network.agents.length,
+      isVNext: false,
+    })) ?? []),
+    ...(vNextNetworks?.map(network => ({
+      ...network,
+      routingModel: network.routingModel.modelId,
+      agentsSize: network.agents.length,
+      workflowsSize: network.workflows.length,
+      toolsSize: network.tools.length,
+      isVNext: true,
+    })) ?? []),
+  ];
 
   return (
-    <div className="grid grid-rows-[auto_1fr] h-full">
+    <MainContentLayout>
       <Header>
         <HeaderTitle>Networks</HeaderTitle>
       </Header>
 
-      {networks.length === 0 ? (
-        <div className="grid place-items-center">
+      {allNetworks.length === 0 ? (
+        <MainContentContent isCentered={true}>
           <EmptyState
             iconSlot={<AgentNetworkCoinIcon />}
             titleSlot="Configure Agent Networks"
@@ -36,13 +65,13 @@ function Networks() {
               </Button>
             }
           />
-        </div>
+        </MainContentContent>
       ) : (
-        <div className="overflow-y-auto">
-          <DataTable isLoading={isLoading} data={networks} columns={networksTableColumns} />
-        </div>
+        <MainContentContent>
+          <DataTable isLoading={isLoading || isVNextLoading} data={allNetworks} columns={networksTableColumns} />
+        </MainContentContent>
       )}
-    </div>
+    </MainContentLayout>
   );
 }
 

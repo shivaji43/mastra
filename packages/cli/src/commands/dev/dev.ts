@@ -24,17 +24,10 @@ const startServer = async (dotMastraPath: string, port: number, env: Map<string,
 
     if (!isWebContainer()) {
       const instrumentation = import.meta.resolve('@opentelemetry/instrumentation/hook.mjs');
-      commands.push('--import=./instrumentation.mjs', `--import=${instrumentation}`);
-    }
-
-    let portToUse = port.toString() || process.env.PORT;
-    if (!portToUse || isNaN(Number(portToUse))) {
-      const portList = Array.from({ length: 21 }, (_, i) => 4111 + i);
-
-      portToUse = String(
-        await getPort({
-          port: portList,
-        }),
+      commands.push(
+        `--import=${import.meta.resolve('mastra/telemetry-loader')}`,
+        '--import=./instrumentation.mjs',
+        `--import=${instrumentation}`,
       );
     }
 
@@ -45,7 +38,7 @@ const startServer = async (dotMastraPath: string, port: number, env: Map<string,
         NODE_ENV: 'production',
         ...Object.fromEntries(env),
         MASTRA_DEV: 'true',
-        PORT: portToUse.toString(),
+        PORT: port.toString(),
         MASTRA_DEFAULT_STORAGE_URL: `file:${join(dotMastraPath, '..', 'mastra.db')}`,
       },
       stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
@@ -142,39 +135,51 @@ export async function dev({
   dir,
   root,
   tools,
+  env,
 }: {
   dir?: string;
   root?: string;
   port: number | null;
   tools?: string[];
+  env?: string;
 }) {
   const rootDir = root || process.cwd();
   const mastraDir = dir ? (dir.startsWith('/') ? dir : join(process.cwd(), dir)) : join(process.cwd(), 'src', 'mastra');
   const dotMastraPath = join(rootDir, '.mastra');
 
-  const defaultToolsPath = join(mastraDir, 'tools/**/*');
+  const defaultToolsPath = join(mastraDir, 'tools/**/*.{js,ts}');
   const discoveredTools = [defaultToolsPath, ...(tools || [])];
 
   const fileService = new FileService();
   const entryFile = fileService.getFirstExistingFile([join(mastraDir, 'index.ts'), join(mastraDir, 'index.js')]);
 
-  const bundler = new DevBundler();
+  const bundler = new DevBundler(env);
+  bundler.__setLogger(logger);
   await bundler.prepare(dotMastraPath);
 
   const watcher = await bundler.watch(entryFile, dotMastraPath, discoveredTools);
 
-  const env = await bundler.loadEnvVars();
+  const loadedEnv = await bundler.loadEnvVars();
 
   const serverOptions = await getServerOptions(entryFile, join(dotMastraPath, 'output'));
 
-  const startPort = port ?? serverOptions?.port ?? 4111;
+  let portToUse = port ?? serverOptions?.port ?? process.env.PORT;
+  if (!portToUse || isNaN(Number(portToUse))) {
+    const portList = Array.from({ length: 21 }, (_, i) => 4111 + i);
 
-  await startServer(join(dotMastraPath, 'output'), startPort, env);
+    portToUse = String(
+      await getPort({
+        port: portList,
+      }),
+    );
+  }
+
+  await startServer(join(dotMastraPath, 'output'), Number(portToUse), loadedEnv);
   watcher.on('event', (event: { code: string }) => {
     if (event.code === 'BUNDLE_END') {
       logger.info('[Mastra Dev] - Bundling finished, restarting server...');
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      rebundleAndRestart(dotMastraPath, startPort, bundler);
+      rebundleAndRestart(dotMastraPath, Number(portToUse), bundler);
     }
   });
 

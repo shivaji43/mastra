@@ -1,9 +1,17 @@
 import { randomUUID } from 'crypto';
-import type { MastraMessageV1, WorkflowRunState } from '@mastra/core';
+import {
+  createSampleMessageV1,
+  createSampleThread,
+  createSampleWorkflowSnapshot,
+  checkWorkflowSnapshot,
+  createSampleMessageV2,
+} from '@internal/storage-test-utils';
+import type { MastraMessageV1, MastraMessageV2, StorageColumn, WorkflowRunState } from '@mastra/core';
+import type { TABLE_NAMES } from '@mastra/core/storage';
 import { TABLE_THREADS, TABLE_MESSAGES, TABLE_WORKFLOW_SNAPSHOT } from '@mastra/core/storage';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi, afterEach } from 'vitest';
 
-import { ClickhouseStore } from '.';
+import { ClickhouseStore, TABLE_ENGINES } from '.';
 import type { ClickhouseConfig } from '.';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -24,33 +32,6 @@ const TEST_CONFIG: ClickhouseConfig = {
   },
 };
 
-// Sample test data factory functions
-const createSampleThread = () => ({
-  id: `thread-${randomUUID()}`,
-  resourceId: `clickhouse-test`,
-  title: 'Test Thread',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  metadata: { key: 'value' },
-});
-
-let role = `user`;
-const getRole = () => {
-  if (role === `user`) role = `assistant`;
-  else role = `user`;
-  return role as 'user' | 'assistant';
-};
-
-const createSampleMessage = (threadId: string, createdAt: Date = new Date()): MastraMessageV1 => ({
-  id: `msg-${randomUUID()}`,
-  resourceId: `clickhouse-test`,
-  role: getRole(),
-  type: 'text',
-  threadId,
-  content: 'Hello',
-  createdAt,
-});
-
 const createSampleTrace = () => ({
   id: `trace-${randomUUID()}`,
   name: 'Test Trace',
@@ -65,39 +46,6 @@ const createSampleEval = () => ({
   result: '{ "score": 1 }',
   createdAt: new Date(),
 });
-
-const createSampleWorkflowSnapshot = (status: WorkflowRunState['context']['steps']['status'], createdAt?: Date) => {
-  const runId = `run-${randomUUID()}`;
-  const stepId = `step-${randomUUID()}`;
-  const timestamp = createdAt || new Date();
-  const snapshot = {
-    result: { success: true },
-    value: {},
-    context: {
-      [stepId]: {
-        status,
-        payload: {},
-        error: undefined,
-        startedAt: timestamp.getTime(),
-        endedAt: new Date(timestamp.getTime() + 15000).getTime(),
-      },
-      input: {},
-    },
-    serializedStepGraph: [],
-    activePaths: [],
-    suspendedPaths: {},
-    runId,
-    timestamp: timestamp.getTime(),
-  } as unknown as WorkflowRunState;
-  return { snapshot, runId, stepId };
-};
-
-const checkWorkflowSnapshot = (snapshot: WorkflowRunState | string, stepId: string, status: string) => {
-  if (typeof snapshot === 'string') {
-    throw new Error('Expected WorkflowRunState, got string');
-  }
-  expect(snapshot.context?.[stepId]?.status).toBe(status);
-};
 
 describe('ClickhouseStore', () => {
   let store: ClickhouseStore;
@@ -171,7 +119,10 @@ describe('ClickhouseStore', () => {
       await store.saveThread({ thread });
 
       // Add some messages
-      const messages = [createSampleMessage(thread.id), createSampleMessage(thread.id)];
+      const messages = [
+        createSampleMessageV1({ threadId: thread.id, resourceId: 'clickhouse-test' }),
+        createSampleMessageV1({ threadId: thread.id, resourceId: 'clickhouse-test' }),
+      ];
       await store.saveMessages({ messages });
 
       await store.deleteThread({ threadId: thread.id });
@@ -183,6 +134,28 @@ describe('ClickhouseStore', () => {
       const retrievedMessages = await store.getMessages({ threadId: thread.id });
       expect(retrievedMessages).toHaveLength(0);
     }, 10e3);
+
+    it('should update thread updatedAt when a message is saved to it', async () => {
+      const thread = createSampleThread();
+      await store.saveThread({ thread });
+
+      // Get the initial thread to capture the original updatedAt
+      const initialThread = await store.getThreadById({ threadId: thread.id });
+      expect(initialThread).toBeDefined();
+      const originalUpdatedAt = initialThread!.updatedAt;
+
+      // Wait a small amount to ensure different timestamp
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Create and save a message to the thread
+      const message = createSampleMessageV1({ threadId: thread.id });
+      await store.saveMessages({ messages: [message] });
+
+      // Retrieve the thread again and check that updatedAt was updated
+      const updatedThread = await store.getThreadById({ threadId: thread.id });
+      expect(updatedThread).toBeDefined();
+      expect(updatedThread!.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+    }, 10e3);
   });
 
   describe('Message Operations', () => {
@@ -191,8 +164,12 @@ describe('ClickhouseStore', () => {
       await store.saveThread({ thread });
 
       const messages = [
-        createSampleMessage(thread.id, new Date(Date.now() - 1000 * 60 * 60 * 24)),
-        createSampleMessage(thread.id),
+        createSampleMessageV1({
+          threadId: thread.id,
+          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+          resourceId: 'clickhouse-test',
+        }),
+        createSampleMessageV1({ threadId: thread.id, resourceId: 'clickhouse-test' }),
       ];
 
       // Save messages
@@ -218,23 +195,35 @@ describe('ClickhouseStore', () => {
       const thread = createSampleThread();
       await store.saveThread({ thread });
 
-      const messages: MastraMessageV1[] = [
+      const messages = [
         {
-          ...createSampleMessage(thread.id, new Date(Date.now() - 1000 * 3)),
-          content: [{ type: 'text', text: 'First' }],
+          ...createSampleMessageV1({
+            threadId: thread.id,
+            createdAt: new Date(Date.now() - 1000 * 3),
+            content: 'First',
+            resourceId: 'clickhouse-test',
+          }),
           role: 'user',
         },
         {
-          ...createSampleMessage(thread.id, new Date(Date.now() - 1000 * 2)),
-          content: [{ type: 'text', text: 'Second' }],
+          ...createSampleMessageV1({
+            threadId: thread.id,
+            createdAt: new Date(Date.now() - 1000 * 2),
+            content: 'Second',
+            resourceId: 'clickhouse-test',
+          }),
           role: 'assistant',
         },
         {
-          ...createSampleMessage(thread.id, new Date(Date.now() - 1000 * 1)),
-          content: [{ type: 'text', text: 'Third' }],
+          ...createSampleMessageV1({
+            threadId: thread.id,
+            createdAt: new Date(Date.now() - 1000 * 1),
+            content: 'Third',
+            resourceId: 'clickhouse-test',
+          }),
           role: 'user',
         },
-      ];
+      ] as MastraMessageV1[];
 
       await store.saveMessages({ messages });
 
@@ -248,13 +237,184 @@ describe('ClickhouseStore', () => {
       });
     }, 10e3);
 
+    it('should upsert messages: duplicate id+threadId results in update, not duplicate row', async () => {
+      const thread = await createSampleThread({ resourceId: 'clickhouse-test' });
+      await store.saveThread({ thread });
+      const baseMessage = createSampleMessageV2({
+        threadId: thread.id,
+        createdAt: new Date(),
+        content: { content: 'Original' },
+        resourceId: 'clickhouse-test',
+      });
+
+      // Insert the message for the first time
+      await store.saveMessages({ messages: [baseMessage], format: 'v2' });
+
+      // Insert again with the same id and threadId but different content
+      const updatedMessage = {
+        ...createSampleMessageV2({
+          threadId: thread.id,
+          createdAt: new Date(),
+          content: { content: 'Updated' },
+          resourceId: 'clickhouse-test',
+        }),
+        id: baseMessage.id,
+      };
+      await store.saveMessages({ messages: [updatedMessage], format: 'v2' });
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Retrieve messages for the thread
+      const retrievedMessages = await store.getMessages({ threadId: thread.id, format: 'v2' });
+
+      // Only one message should exist for that id+threadId
+      expect(retrievedMessages.filter(m => m.id === baseMessage.id)).toHaveLength(1);
+
+      // The content should be the updated one
+      expect(retrievedMessages.find(m => m.id === baseMessage.id)?.content.content).toBe('Updated');
+    }, 10e3);
+
+    it('should upsert messages: duplicate id and different threadid', async () => {
+      const thread1 = await createSampleThread();
+      const thread2 = await createSampleThread();
+      await store.saveThread({ thread: thread1 });
+      await store.saveThread({ thread: thread2 });
+
+      const message = createSampleMessageV2({
+        threadId: thread1.id,
+        createdAt: new Date(),
+        content: { content: 'Thread1 Content' },
+        resourceId: thread1.resourceId,
+      });
+
+      // Insert message into thread1
+      await store.saveMessages({ messages: [message], format: 'v2' });
+
+      // Attempt to insert a message with the same id but different threadId
+      const conflictingMessage = {
+        ...createSampleMessageV2({
+          threadId: thread2.id,
+          createdAt: new Date(),
+          content: { content: 'Thread2 Content' },
+          resourceId: thread2.resourceId,
+        }),
+        id: message.id,
+      };
+
+      // Save should also save the message to the new thread
+      await store.saveMessages({ messages: [conflictingMessage], format: 'v2' });
+
+      // Retrieve messages for both threads
+      const thread1Messages = await store.getMessages({ threadId: thread1.id, format: 'v2' });
+      const thread2Messages = await store.getMessages({ threadId: thread2.id, format: 'v2' });
+
+      // Thread 1 should have the message with that id
+      expect(thread1Messages.find(m => m.id === message.id)?.content.content).toBe('Thread1 Content');
+
+      // Thread 2 should have the message with that id
+      expect(thread2Messages.find(m => m.id === message.id)?.content.content).toBe('Thread2 Content');
+    }, 10e3);
+
+    // it('should retrieve messages w/ next/prev messages by message id + resource id', async () => {
+    //   const messages: MastraMessageV2[] = [
+    //     createSampleMessageV2({ threadId: 'thread-one', content: 'First', resourceId: 'cross-thread-resource' }),
+    //     createSampleMessageV2({ threadId: 'thread-one', content: 'Second', resourceId: 'cross-thread-resource' }),
+    //     createSampleMessageV2({ threadId: 'thread-one', content: 'Third', resourceId: 'cross-thread-resource' }),
+
+    //     createSampleMessageV2({ threadId: 'thread-two', content: 'Fourth', resourceId: 'cross-thread-resource' }),
+    //     createSampleMessageV2({ threadId: 'thread-two', content: 'Fifth', resourceId: 'cross-thread-resource' }),
+    //     createSampleMessageV2({ threadId: 'thread-two', content: 'Sixth', resourceId: 'cross-thread-resource' }),
+
+    //     createSampleMessageV2({ threadId: 'thread-three', content: 'Seventh', resourceId: 'other-resource' }),
+    //     createSampleMessageV2({ threadId: 'thread-three', content: 'Eighth', resourceId: 'other-resource' }),
+    //   ];
+
+    //   await store.saveMessages({ messages: messages, format: 'v2' });
+
+    //   const retrievedMessages = await store.getMessages({ threadId: 'thread-one', format: 'v2' });
+    //   expect(retrievedMessages).toHaveLength(3);
+    //   expect(retrievedMessages.map((m: any) => m.content.parts[0].text)).toEqual(['First', 'Second', 'Third']);
+
+    //   const retrievedMessages2 = await store.getMessages({ threadId: 'thread-two', format: 'v2' });
+    //   expect(retrievedMessages2).toHaveLength(3);
+    //   expect(retrievedMessages2.map((m: any) => m.content.parts[0].text)).toEqual(['Fourth', 'Fifth', 'Sixth']);
+
+    //   const retrievedMessages3 = await store.getMessages({ threadId: 'thread-three', format: 'v2' });
+    //   expect(retrievedMessages3).toHaveLength(2);
+    //   expect(retrievedMessages3.map((m: any) => m.content.parts[0].text)).toEqual(['Seventh', 'Eighth']);
+
+    //   const crossThreadMessages = await store.getMessages({
+    //     threadId: 'thread-doesnt-exist',
+    //     resourceId: 'cross-thread-resource',
+    //     format: 'v2',
+    //     selectBy: {
+    //       last: 0,
+    //       include: [
+    //         {
+    //           id: messages[1].id,
+    //           withNextMessages: 2,
+    //           withPreviousMessages: 2,
+    //         },
+    //         {
+    //           id: messages[4].id,
+    //           withPreviousMessages: 2,
+    //           withNextMessages: 2,
+    //         },
+    //       ],
+    //     },
+    //   });
+
+    //   expect(crossThreadMessages).toHaveLength(6);
+    //   expect(crossThreadMessages.filter(m => m.threadId === `thread-one`)).toHaveLength(3);
+    //   expect(crossThreadMessages.filter(m => m.threadId === `thread-two`)).toHaveLength(3);
+
+    //   const crossThreadMessages2 = await store.getMessages({
+    //     threadId: 'thread-one',
+    //     resourceId: 'cross-thread-resource',
+    //     format: 'v2',
+    //     selectBy: {
+    //       last: 0,
+    //       include: [
+    //         {
+    //           id: messages[4].id,
+    //           withPreviousMessages: 1,
+    //           withNextMessages: 30,
+    //         },
+    //       ],
+    //     },
+    //   });
+
+    //   expect(crossThreadMessages2).toHaveLength(3);
+    //   expect(crossThreadMessages2.filter(m => m.threadId === `thread-one`)).toHaveLength(0);
+    //   expect(crossThreadMessages2.filter(m => m.threadId === `thread-two`)).toHaveLength(3);
+
+    //   const crossThreadMessages3 = await store.getMessages({
+    //     threadId: 'thread-two',
+    //     resourceId: 'cross-thread-resource',
+    //     format: 'v2',
+    //     selectBy: {
+    //       last: 0,
+    //       include: [
+    //         {
+    //           id: messages[1].id,
+    //           withNextMessages: 1,
+    //           withPreviousMessages: 1,
+    //         },
+    //       ],
+    //     },
+    //   });
+
+    //   expect(crossThreadMessages3).toHaveLength(3);
+    //   expect(crossThreadMessages3.filter(m => m.threadId === `thread-one`)).toHaveLength(3);
+    //   expect(crossThreadMessages3.filter(m => m.threadId === `thread-two`)).toHaveLength(0);
+    // });
+
     // it('should rollback on error during message save', async () => {
     //   const thread = createSampleThread();
     //   await store.saveThread({ thread });
 
     //   const messages = [
-    //     createSampleMessage(thread.id),
-    //     { ...createSampleMessage(thread.id), id: null }, // This will cause an error
+    //     createSampleMessageV1({ threadId: thread.id }),
+    //     { ...createSampleMessageV1({ threadId: thread.id }), id: null }, // This will cause an error
     //   ];
 
     //   await expect(store.saveMessages({ messages })).rejects.toThrow();
@@ -839,6 +999,152 @@ describe('ClickhouseStore', () => {
       } catch {
         /* ignore */
       }
+    });
+  });
+
+  describe('alterTable', () => {
+    const TEST_TABLE = 'test_alter_table';
+    const BASE_SCHEMA = {
+      id: { type: 'integer', primaryKey: true, nullable: false },
+      name: { type: 'text', nullable: true },
+      createdAt: { type: 'timestamp', nullable: false },
+      updatedAt: { type: 'timestamp', nullable: false },
+    } as Record<string, StorageColumn>;
+
+    TABLE_ENGINES[TEST_TABLE] = 'MergeTree()';
+
+    beforeEach(async () => {
+      await store.createTable({ tableName: TEST_TABLE as TABLE_NAMES, schema: BASE_SCHEMA });
+    });
+
+    afterEach(async () => {
+      await store.clearTable({ tableName: TEST_TABLE as TABLE_NAMES });
+    });
+
+    it('adds a new column to an existing table', async () => {
+      await store.alterTable({
+        tableName: TEST_TABLE as TABLE_NAMES,
+        schema: { ...BASE_SCHEMA, age: { type: 'integer', nullable: true } },
+        ifNotExists: ['age'],
+      });
+
+      await store.insert({
+        tableName: TEST_TABLE as TABLE_NAMES,
+        record: { id: 1, name: 'Alice', age: 42, createdAt: new Date(), updatedAt: new Date() },
+      });
+
+      const row = await store.load<{ id: string; name: string; age?: number }>({
+        tableName: TEST_TABLE as TABLE_NAMES,
+        keys: { id: '1' },
+      });
+      expect(row?.age).toBe(42);
+    });
+
+    it('is idempotent when adding an existing column', async () => {
+      await store.alterTable({
+        tableName: TEST_TABLE as TABLE_NAMES,
+        schema: { ...BASE_SCHEMA, foo: { type: 'text', nullable: true } },
+        ifNotExists: ['foo'],
+      });
+      // Add the column again (should not throw)
+      await expect(
+        store.alterTable({
+          tableName: TEST_TABLE as TABLE_NAMES,
+          schema: { ...BASE_SCHEMA, foo: { type: 'text', nullable: true } },
+          ifNotExists: ['foo'],
+        }),
+      ).resolves.not.toThrow();
+    });
+
+    it('should add a default value to a column when using not null', async () => {
+      await store.insert({
+        tableName: TEST_TABLE as TABLE_NAMES,
+        record: { id: 1, name: 'Bob', createdAt: new Date(), updatedAt: new Date() },
+      });
+
+      await expect(
+        store.alterTable({
+          tableName: TEST_TABLE as TABLE_NAMES,
+          schema: { ...BASE_SCHEMA, text_column: { type: 'text', nullable: false } },
+          ifNotExists: ['text_column'],
+        }),
+      ).resolves.not.toThrow();
+
+      await expect(
+        store.alterTable({
+          tableName: TEST_TABLE as TABLE_NAMES,
+          schema: { ...BASE_SCHEMA, timestamp_column: { type: 'timestamp', nullable: false } },
+          ifNotExists: ['timestamp_column'],
+        }),
+      ).resolves.not.toThrow();
+
+      await expect(
+        store.alterTable({
+          tableName: TEST_TABLE as TABLE_NAMES,
+          schema: { ...BASE_SCHEMA, bigint_column: { type: 'bigint', nullable: false } },
+          ifNotExists: ['bigint_column'],
+        }),
+      ).resolves.not.toThrow();
+
+      await expect(
+        store.alterTable({
+          tableName: TEST_TABLE as TABLE_NAMES,
+          schema: { ...BASE_SCHEMA, jsonb_column: { type: 'jsonb', nullable: false } },
+          ifNotExists: ['jsonb_column'],
+        }),
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('ClickhouseStore Double-nesting Prevention', () => {
+    beforeEach(async () => {
+      await store.clearTable({ tableName: TABLE_MESSAGES });
+      await store.clearTable({ tableName: TABLE_THREADS });
+    });
+
+    it('should handle stringified JSON content without double-nesting', async () => {
+      const threadData = createSampleThread();
+      const thread = await store.saveThread({ thread: threadData });
+
+      // Simulate user passing stringified JSON as message content (like the original bug report)
+      const stringifiedContent = JSON.stringify({ userInput: 'test data', metadata: { key: 'value' } });
+      const message: MastraMessageV2 = {
+        id: `msg-${randomUUID()}`,
+        role: 'user',
+        threadId: thread.id,
+        resourceId: thread.resourceId,
+        content: {
+          format: 2,
+          parts: [{ type: 'text', text: stringifiedContent }],
+          content: stringifiedContent, // This is the stringified JSON that user passed
+        },
+        createdAt: new Date(),
+      };
+
+      // Save the message - this should stringify the whole content object for storage
+      await store.saveMessages({ messages: [message], format: 'v2' });
+
+      // Retrieve the message - this is where double-nesting could occur
+      const retrievedMessages = await store.getMessages({ threadId: thread.id, format: 'v2' });
+      expect(retrievedMessages).toHaveLength(1);
+
+      const retrievedMessage = retrievedMessages[0] as MastraMessageV2;
+
+      // Check that content is properly structured as a V2 message
+      expect(typeof retrievedMessage.content).toBe('object');
+      expect(retrievedMessage.content.format).toBe(2);
+
+      // CRITICAL: The content.content should still be the original stringified JSON
+      // NOT double-nested like: { content: '{"format":2,"parts":[...],"content":"{\\"userInput\\":\\"test data\\"}"}' }
+      expect(retrievedMessage.content.content).toBe(stringifiedContent);
+
+      // Verify the content can be parsed as the original JSON
+      const parsedContent = JSON.parse(retrievedMessage.content.content as string);
+      expect(parsedContent).toEqual({ userInput: 'test data', metadata: { key: 'value' } });
+
+      // Additional check: ensure the message doesn't have the "Found unhandled message" structure
+      expect(retrievedMessage.content.parts).toBeDefined();
+      expect(Array.isArray(retrievedMessage.content.parts)).toBe(true);
     });
   });
 

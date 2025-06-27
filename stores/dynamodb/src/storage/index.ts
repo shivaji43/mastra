@@ -1,7 +1,10 @@
 import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import type { StorageThreadType, WorkflowRunState, MastraMessageV1, MastraMessageV2 } from '@mastra/core';
+import type { MastraMessageContentV2 } from '@mastra/core/agent';
 import { MessageList } from '@mastra/core/agent';
+import { ErrorCategory, ErrorDomain, MastraError } from '@mastra/core/error';
+import type { StorageThreadType, MastraMessageV2, MastraMessageV1 } from '@mastra/core/memory';
+
 import {
   MastraStorage,
   TABLE_THREADS,
@@ -10,7 +13,19 @@ import {
   TABLE_EVALS,
   TABLE_TRACES,
 } from '@mastra/core/storage';
-import type { EvalRow, StorageGetMessagesArg, WorkflowRun, WorkflowRuns, TABLE_NAMES } from '@mastra/core/storage';
+import type {
+  EvalRow,
+  StorageGetMessagesArg,
+  WorkflowRun,
+  WorkflowRuns,
+  TABLE_NAMES,
+  StorageGetTracesArg,
+  PaginationInfo,
+  StorageColumn,
+  TABLE_RESOURCES,
+} from '@mastra/core/storage';
+import type { Trace } from '@mastra/core/telemetry';
+import type { WorkflowRunState } from '@mastra/core/workflows';
 import type { Service } from 'electrodb';
 import { getElectroDbService } from '../entities';
 
@@ -23,6 +38,8 @@ export interface DynamoDBStoreConfig {
     secretAccessKey: string;
   };
 }
+
+type SUPPORTED_TABLE_NAMES = Exclude<TABLE_NAMES, typeof TABLE_RESOURCES>;
 
 // Define a type for our service that allows string indexing
 type MastraService = Service<Record<string, any>> & {
@@ -50,25 +67,36 @@ export class DynamoDBStore extends MastraStorage {
     super({ name });
 
     // Validate required config
-    if (!config.tableName || typeof config.tableName !== 'string' || config.tableName.trim() === '') {
-      throw new Error('DynamoDBStore: config.tableName must be provided and cannot be empty.');
-    }
-    // Validate tableName characters (basic check)
-    if (!/^[a-zA-Z0-9_.-]{3,255}$/.test(config.tableName)) {
-      throw new Error(
-        `DynamoDBStore: config.tableName "${config.tableName}" contains invalid characters or is not between 3 and 255 characters long.`,
+    try {
+      if (!config.tableName || typeof config.tableName !== 'string' || config.tableName.trim() === '') {
+        throw new Error('DynamoDBStore: config.tableName must be provided and cannot be empty.');
+      }
+      // Validate tableName characters (basic check)
+      if (!/^[a-zA-Z0-9_.-]{3,255}$/.test(config.tableName)) {
+        throw new Error(
+          `DynamoDBStore: config.tableName "${config.tableName}" contains invalid characters or is not between 3 and 255 characters long.`,
+        );
+      }
+
+      const dynamoClient = new DynamoDBClient({
+        region: config.region || 'us-east-1',
+        endpoint: config.endpoint,
+        credentials: config.credentials,
+      });
+
+      this.tableName = config.tableName;
+      this.client = DynamoDBDocumentClient.from(dynamoClient);
+      this.service = getElectroDbService(this.client, this.tableName) as MastraService;
+    } catch (error) {
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_CONSTRUCTOR_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.USER,
+        },
+        error,
       );
     }
-
-    const dynamoClient = new DynamoDBClient({
-      region: config.region || 'us-east-1',
-      endpoint: config.endpoint,
-      credentials: config.credentials,
-    });
-
-    this.tableName = config.tableName;
-    this.client = DynamoDBDocumentClient.from(dynamoClient);
-    this.service = getElectroDbService(this.client, this.tableName) as MastraService;
 
     // We're using a single table design with ElectroDB,
     // so we don't need to create multiple tables
@@ -100,7 +128,15 @@ export class DynamoDBStore extends MastraStorage {
       this.logger.debug(`Table ${this.tableName} exists and is accessible`);
     } catch (error) {
       this.logger.error('Error validating table access', { tableName: this.tableName, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_VALIDATE_TABLE_ACCESS_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName: this.tableName },
+        },
+        error,
+      );
     }
   }
 
@@ -126,7 +162,15 @@ export class DynamoDBStore extends MastraStorage {
       }
 
       // For other errors (like permissions issues), we should throw
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_VALIDATE_TABLE_EXISTS_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName: this.tableName },
+        },
+        error,
+      );
     }
   }
 
@@ -153,7 +197,15 @@ export class DynamoDBStore extends MastraStorage {
       // The error has already been handled by _performInitializationAndStore
       // (i.e., this.hasInitialized was reset). Re-throwing here ensures
       // the caller of init() is aware of the failure.
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_INIT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName: this.tableName },
+        },
+        error,
+      );
     }
   }
 
@@ -203,15 +255,29 @@ export class DynamoDBStore extends MastraStorage {
     return processed;
   }
 
+  async alterTable(_args: {
+    tableName: TABLE_NAMES;
+    schema: Record<string, StorageColumn>;
+    ifNotExists: string[];
+  }): Promise<void> {
+    // Nothing to do here, DynamoDB has a flexible schema and handles new attributes automatically upon insertion/update.
+  }
+
   /**
    * Clear all items from a logical "table" (entity type)
    */
-  async clearTable({ tableName }: { tableName: TABLE_NAMES }): Promise<void> {
+  async clearTable({ tableName }: { tableName: SUPPORTED_TABLE_NAMES }): Promise<void> {
     this.logger.debug('DynamoDB clearTable called', { tableName });
 
     const entityName = this.getEntityNameForTable(tableName);
     if (!entityName || !this.service.entities[entityName]) {
-      throw new Error(`No entity defined for ${tableName}`);
+      throw new MastraError({
+        id: 'STORAGE_DYNAMODB_STORE_CLEAR_TABLE_INVALID_ARGS',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.USER,
+        text: 'No entity defined for tableName',
+        details: { tableName },
+      });
     }
 
     try {
@@ -281,20 +347,39 @@ export class DynamoDBStore extends MastraStorage {
 
       this.logger.debug(`Successfully cleared all records for ${tableName}`);
     } catch (error) {
-      this.logger.error('Failed to clear table', { tableName, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_CLEAR_TABLE_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName },
+        },
+        error,
+      );
     }
   }
 
   /**
    * Insert a record into the specified "table" (entity)
    */
-  async insert({ tableName, record }: { tableName: TABLE_NAMES; record: Record<string, any> }): Promise<void> {
+  async insert({
+    tableName,
+    record,
+  }: {
+    tableName: SUPPORTED_TABLE_NAMES;
+    record: Record<string, any>;
+  }): Promise<void> {
     this.logger.debug('DynamoDB insert called', { tableName });
 
     const entityName = this.getEntityNameForTable(tableName);
     if (!entityName || !this.service.entities[entityName]) {
-      throw new Error(`No entity defined for ${tableName}`);
+      throw new MastraError({
+        id: 'STORAGE_DYNAMODB_STORE_INSERT_INVALID_ARGS',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.USER,
+        text: 'No entity defined for tableName',
+        details: { tableName },
+      });
     }
 
     try {
@@ -302,20 +387,39 @@ export class DynamoDBStore extends MastraStorage {
       const dataToSave = { entity: entityName, ...this.preprocessRecord(record) };
       await this.service.entities[entityName].create(dataToSave).go();
     } catch (error) {
-      this.logger.error('Failed to insert record', { tableName, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_INSERT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName },
+        },
+        error,
+      );
     }
   }
 
   /**
    * Insert multiple records as a batch
    */
-  async batchInsert({ tableName, records }: { tableName: TABLE_NAMES; records: Record<string, any>[] }): Promise<void> {
+  async batchInsert({
+    tableName,
+    records,
+  }: {
+    tableName: SUPPORTED_TABLE_NAMES;
+    records: Record<string, any>[];
+  }): Promise<void> {
     this.logger.debug('DynamoDB batchInsert called', { tableName, count: records.length });
 
     const entityName = this.getEntityNameForTable(tableName);
     if (!entityName || !this.service.entities[entityName]) {
-      throw new Error(`No entity defined for ${tableName}`);
+      throw new MastraError({
+        id: 'STORAGE_DYNAMODB_STORE_BATCH_INSERT_INVALID_ARGS',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.USER,
+        text: 'No entity defined for tableName',
+        details: { tableName },
+      });
     }
 
     // Add entity type and preprocess each record
@@ -345,20 +449,39 @@ export class DynamoDBStore extends MastraStorage {
         // Original batch call: await this.service.entities[entityName].create(batch).go();
       }
     } catch (error) {
-      this.logger.error('Failed to batch insert records', { tableName, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_BATCH_INSERT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName },
+        },
+        error,
+      );
     }
   }
 
   /**
    * Load a record by its keys
    */
-  async load<R>({ tableName, keys }: { tableName: TABLE_NAMES; keys: Record<string, string> }): Promise<R | null> {
+  async load<R>({
+    tableName,
+    keys,
+  }: {
+    tableName: SUPPORTED_TABLE_NAMES;
+    keys: Record<string, string>;
+  }): Promise<R | null> {
     this.logger.debug('DynamoDB load called', { tableName, keys });
 
     const entityName = this.getEntityNameForTable(tableName);
     if (!entityName || !this.service.entities[entityName]) {
-      throw new Error(`No entity defined for ${tableName}`);
+      throw new MastraError({
+        id: 'STORAGE_DYNAMODB_STORE_LOAD_INVALID_ARGS',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.USER,
+        text: 'No entity defined for tableName',
+        details: { tableName },
+      });
     }
 
     try {
@@ -383,8 +506,15 @@ export class DynamoDBStore extends MastraStorage {
 
       return data as R;
     } catch (error) {
-      this.logger.error('Failed to load record', { tableName, keys, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_LOAD_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { tableName },
+        },
+        error,
+      );
     }
   }
 
@@ -402,12 +532,22 @@ export class DynamoDBStore extends MastraStorage {
       const data = result.data;
       return {
         ...data,
+        // Convert date strings back to Date objects for consistency
+        createdAt: typeof data.createdAt === 'string' ? new Date(data.createdAt) : data.createdAt,
+        updatedAt: typeof data.updatedAt === 'string' ? new Date(data.updatedAt) : data.updatedAt,
         // metadata: data.metadata ? JSON.parse(data.metadata) : undefined, // REMOVED by AI
         // metadata is already transformed by the entity's getter
       } as StorageThreadType;
     } catch (error) {
-      this.logger.error('Failed to get thread by ID', { threadId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_THREAD_BY_ID_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { threadId },
+        },
+        error,
+      );
     }
   }
 
@@ -423,12 +563,22 @@ export class DynamoDBStore extends MastraStorage {
       // ElectroDB handles the transformation with attribute getters
       return result.data.map((data: any) => ({
         ...data,
+        // Convert date strings back to Date objects for consistency
+        createdAt: typeof data.createdAt === 'string' ? new Date(data.createdAt) : data.createdAt,
+        updatedAt: typeof data.updatedAt === 'string' ? new Date(data.updatedAt) : data.updatedAt,
         // metadata: data.metadata ? JSON.parse(data.metadata) : undefined, // REMOVED by AI
         // metadata is already transformed by the entity's getter
       })) as StorageThreadType[];
     } catch (error) {
-      this.logger.error('Failed to get threads by resource ID', { resourceId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_THREADS_BY_RESOURCE_ID_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { resourceId },
+        },
+        error,
+      );
     }
   }
 
@@ -459,8 +609,15 @@ export class DynamoDBStore extends MastraStorage {
         metadata: thread.metadata,
       };
     } catch (error) {
-      this.logger.error('Failed to save thread', { threadId: thread.id, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_SAVE_THREAD_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { threadId: thread.id },
+        },
+        error,
+      );
     }
   }
 
@@ -515,8 +672,15 @@ export class DynamoDBStore extends MastraStorage {
         updatedAt: now,
       };
     } catch (error) {
-      this.logger.error('Failed to update thread', { threadId: id, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_UPDATE_THREAD_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { threadId: id },
+        },
+        error,
+      );
     }
   }
 
@@ -532,8 +696,15 @@ export class DynamoDBStore extends MastraStorage {
       // 2. Delete any vector embeddings related to this thread
       // These would be additional operations
     } catch (error) {
-      this.logger.error('Failed to delete thread', { threadId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_DELETE_THREAD_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { threadId },
+        },
+        error,
+      );
     }
   }
 
@@ -553,12 +724,13 @@ export class DynamoDBStore extends MastraStorage {
       // Provide *all* composite key components for the 'byThread' index ('entity', 'threadId')
       const query = this.service.entities.message.query.byThread({ entity: 'message', threadId });
 
+      const limit = this.resolveMessageLimit({ last: selectBy?.last, defaultLimit: Number.MAX_SAFE_INTEGER });
       // Apply the 'last' limit if provided
-      if (selectBy?.last && typeof selectBy.last === 'number') {
+      if (limit !== Number.MAX_SAFE_INTEGER) {
         // Use ElectroDB's limit parameter
         // DDB GSIs are sorted in ascending order
         // Use ElectroDB's order parameter to sort in descending order to retrieve 'latest' messages
-        const results = await query.go({ limit: selectBy.last, order: 'desc' });
+        const results = await query.go({ limit, order: 'desc' });
         // Use arrow function in map to preserve 'this' context for parseMessageData
         const list = new MessageList({ threadId, resourceId }).add(
           results.data.map((data: any) => this.parseMessageData(data)),
@@ -578,8 +750,15 @@ export class DynamoDBStore extends MastraStorage {
       if (format === `v2`) return list.get.all.v2();
       return list.get.all.v1();
     } catch (error) {
-      this.logger.error('Failed to get messages', { threadId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_MESSAGES_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { threadId },
+        },
+        error,
+      );
     }
   }
   async saveMessages(args: { messages: MastraMessageV1[]; format?: undefined | 'v1' }): Promise<MastraMessageV1[]>;
@@ -592,6 +771,11 @@ export class DynamoDBStore extends MastraStorage {
 
     if (!messages.length) {
       return [];
+    }
+
+    const threadId = messages[0]?.threadId;
+    if (!threadId) {
+      throw new Error('Thread ID is required');
     }
 
     // Ensure 'entity' is added and complex fields are handled
@@ -624,26 +808,41 @@ export class DynamoDBStore extends MastraStorage {
         batches.push(batch);
       }
 
-      // Process each batch
-      for (const batch of batches) {
-        // Try creating each item individually instead of passing the whole batch
-        for (const messageData of batch) {
-          // Ensure each item has the entity property before sending
-          if (!messageData.entity) {
-            this.logger.error('Missing entity property in message data for create', { messageData });
-            throw new Error('Internal error: Missing entity property during saveMessages');
+      // Process each batch and update thread's updatedAt in parallel for better performance
+      await Promise.all([
+        // Process message batches
+        ...batches.map(async batch => {
+          for (const messageData of batch) {
+            // Ensure each item has the entity property before sending
+            if (!messageData.entity) {
+              this.logger.error('Missing entity property in message data for create', { messageData });
+              throw new Error('Internal error: Missing entity property during saveMessages');
+            }
+            await this.service.entities.message.put(messageData).go();
           }
-          await this.service.entities.message.create(messageData).go();
-        }
-        // Original batch call: await this.service.entities.message.create(batch).go();
-      }
+        }),
+        // Update thread's updatedAt timestamp
+        this.service.entities.thread
+          .update({ entity: 'thread', id: threadId })
+          .set({
+            updatedAt: new Date().toISOString(),
+          })
+          .go(),
+      ]);
 
       const list = new MessageList().add(messages, 'memory');
       if (format === `v1`) return list.get.all.v1();
       return list.get.all.v2();
     } catch (error) {
-      this.logger.error('Failed to save messages', { error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_SAVE_MESSAGES_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { count: messages.length },
+        },
+        error,
+      );
     }
   }
 
@@ -707,8 +906,14 @@ export class DynamoDBStore extends MastraStorage {
 
       return items;
     } catch (error) {
-      this.logger.error('Failed to get traces', { error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_TRACES_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+        },
+        error,
+      );
     }
   }
 
@@ -727,8 +932,15 @@ export class DynamoDBStore extends MastraStorage {
         records: recordsToSave, // Pass records with 'entity' included
       });
     } catch (error) {
-      this.logger.error('Failed to batch insert traces', { error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_BATCH_TRACE_INSERT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { count: records.length },
+        },
+        error,
+      );
     }
   }
 
@@ -757,11 +969,18 @@ export class DynamoDBStore extends MastraStorage {
         updatedAt: now,
         resourceId,
       };
-      // Pass the data including 'entity'
-      await this.service.entities.workflowSnapshot.create(data).go();
+      // Use upsert instead of create to handle both create and update cases
+      await this.service.entities.workflowSnapshot.upsert(data).go();
     } catch (error) {
-      this.logger.error('Failed to persist workflow snapshot', { workflowName, runId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_PERSIST_WORKFLOW_SNAPSHOT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { workflowName, runId },
+        },
+        error,
+      );
     }
   }
 
@@ -792,8 +1011,15 @@ export class DynamoDBStore extends MastraStorage {
       // Parse the snapshot string
       return result.data.snapshot as WorkflowRunState;
     } catch (error) {
-      this.logger.error('Failed to load workflow snapshot', { workflowName, runId, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_LOAD_WORKFLOW_SNAPSHOT_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { workflowName, runId },
+        },
+        error,
+      );
     }
   }
 
@@ -883,8 +1109,15 @@ export class DynamoDBStore extends MastraStorage {
         total,
       };
     } catch (error) {
-      this.logger.error('Failed to get workflow runs', { error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_WORKFLOW_RUNS_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { workflowName: args?.workflowName || '', resourceId: args?.resourceId || '' },
+        },
+        error,
+      );
     }
   }
 
@@ -955,8 +1188,15 @@ export class DynamoDBStore extends MastraStorage {
         resourceId: matchingRunDbItem.resourceId,
       };
     } catch (error) {
-      this.logger.error('Failed to get workflow run by ID', { runId, workflowName, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_WORKFLOW_RUN_BY_ID_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { runId, workflowName: args?.workflowName || '' },
+        },
+        error,
+      );
     }
   }
 
@@ -973,8 +1213,8 @@ export class DynamoDBStore extends MastraStorage {
   }
 
   // Helper methods for entity/table mapping
-  private getEntityNameForTable(tableName: TABLE_NAMES): string | null {
-    const mapping: Record<TABLE_NAMES, string> = {
+  private getEntityNameForTable(tableName: SUPPORTED_TABLE_NAMES): string | null {
+    const mapping: Record<SUPPORTED_TABLE_NAMES, string> = {
       [TABLE_THREADS]: 'thread',
       [TABLE_MESSAGES]: 'message',
       [TABLE_WORKFLOW_SNAPSHOT]: 'workflowSnapshot',
@@ -1058,9 +1298,55 @@ export class DynamoDBStore extends MastraStorage {
         }
       });
     } catch (error) {
-      this.logger.error('Failed to get evals by agent name', { agentName, type, error });
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_GET_EVALS_BY_AGENT_NAME_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+          details: { agentName },
+        },
+        error,
+      );
     }
+  }
+
+  async getTracesPaginated(_args: StorageGetTracesArg): Promise<PaginationInfo & { traces: Trace[] }> {
+    throw new MastraError(
+      {
+        id: 'STORAGE_DYNAMODB_STORE_GET_TRACES_PAGINATED_FAILED',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.THIRD_PARTY,
+      },
+      new Error('Method not implemented.'),
+    );
+  }
+
+  async getThreadsByResourceIdPaginated(_args: {
+    resourceId: string;
+    page?: number;
+    perPage?: number;
+  }): Promise<PaginationInfo & { threads: StorageThreadType[] }> {
+    throw new MastraError(
+      {
+        id: 'STORAGE_DYNAMODB_STORE_GET_THREADS_BY_RESOURCE_ID_PAGINATED_FAILED',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.THIRD_PARTY,
+      },
+      new Error('Method not implemented.'),
+    );
+  }
+
+  async getMessagesPaginated(
+    _args: StorageGetMessagesArg,
+  ): Promise<PaginationInfo & { messages: MastraMessageV1[] | MastraMessageV2[] }> {
+    throw new MastraError(
+      {
+        id: 'STORAGE_DYNAMODB_STORE_GET_MESSAGES_PAGINATED_FAILED',
+        domain: ErrorDomain.STORAGE,
+        category: ErrorCategory.THIRD_PARTY,
+      },
+      new Error('Method not implemented.'),
+    );
   }
 
   /**
@@ -1073,9 +1359,25 @@ export class DynamoDBStore extends MastraStorage {
       this.client.destroy();
       this.logger.debug('DynamoDB client closed successfully for store:', { name: this.name });
     } catch (error) {
-      this.logger.error('Error closing DynamoDB client for store:', { name: this.name, error });
-      // Optionally re-throw or handle as appropriate for your application's error handling strategy
-      throw error;
+      throw new MastraError(
+        {
+          id: 'STORAGE_DYNAMODB_STORE_CLOSE_FAILED',
+          domain: ErrorDomain.STORAGE,
+          category: ErrorCategory.THIRD_PARTY,
+        },
+        error,
+      );
     }
+  }
+
+  async updateMessages(_args: {
+    messages: Partial<Omit<MastraMessageV2, 'createdAt'>> &
+      {
+        id: string;
+        content?: { metadata?: MastraMessageContentV2['metadata']; content?: MastraMessageContentV2['content'] };
+      }[];
+  }): Promise<MastraMessageV2[]> {
+    this.logger.error('updateMessages is not yet implemented in DynamoDBStore');
+    throw new Error('Method not implemented');
   }
 }
