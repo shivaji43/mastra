@@ -32,8 +32,8 @@ interface DispatcherSession extends SkillSession {
   };
   sendSignal(
     input: { id: string; type: 'user'; tagName: 'user'; contents: string },
-    options: { requestContext: RequestContext },
-  ): { accepted: Promise<unknown> };
+    options: { requestContext: RequestContext; requireDelivery?: boolean },
+  ): { accepted: Promise<{ accepted: true; runId?: string; action?: string }> };
 }
 
 type FactoryController = Pick<AgentController<MastraCodeState>, 'getSessionByResource'>;
@@ -287,9 +287,19 @@ export class FactoryDecisionDispatcher {
             tagName: 'user',
             contents: resolved.message,
           },
-          { requestContext },
+          // Without `requireDelivery` the session resolves `accepted` on the
+          // next tick and swallows wake failures, so a kickoff that never
+          // reached the agent would be marked succeeded and the thread would
+          // stay empty forever.
+          { requestContext, requireDelivery: true },
         );
-        await result.accepted;
+        const settled = await result.accepted;
+        if (settled.action !== 'wake' && settled.action !== 'deliver') {
+          // An undefined action means the session did not verify delivery at
+          // all — with `requireDelivery` set that is a contract violation, not
+          // a success.
+          throw new Error(`Factory skill invocation signal did not reach the agent (${String(settled.action)}).`);
+        }
         return;
       }
       case 'sendMessage': {

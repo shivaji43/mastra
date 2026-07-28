@@ -112,11 +112,54 @@ interface ShOptions {
   phase?: string;
 }
 
-/** Run a shell script in the sandbox via `sh -c`, bounded by a hang guard. */
+/**
+ * A thrown transport-level failure that is worth retrying: remote sandbox
+ * providers (e.g. the platform workspace proxy) surface transient 5xx errors
+ * as exceptions carrying an HTTP `status` — typically while a freshly
+ * provisioned VM is still coming up. Command failures are NOT exceptions
+ * (they resolve with a non-zero exit code), so retrying here never re-runs a
+ * command that the sandbox already executed and rejected.
+ */
+function isTransientTransportError(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status;
+  return typeof status === 'number' && status >= 500;
+}
+
+const SH_RETRIES = 2;
+const SH_RETRY_DELAY_MS = 2000;
+
+/**
+ * Run a shell script in the sandbox via `sh -c`, bounded by a hang guard.
+ * Transient transport-level 5xx failures (proxy hiccups while the VM boots)
+ * are retried with a short backoff; every script routed through here is safe
+ * to re-run. Hang-guard timeouts are NOT retried — the budget applies to the
+ * command as a whole.
+ */
 async function sh(
   sandbox: MaterializationSandbox,
   script: string,
   options: ShOptions = {},
+): Promise<SandboxCommandResult> {
+  // One budget for the command as a whole: each attempt only gets the time
+  // remaining, so transport retries can never multiply the hang guard.
+  const deadlineMs = Date.now() + (options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await shOnce(sandbox, script, { ...options, timeoutMs: Math.max(deadlineMs - Date.now(), 1) });
+    } catch (error) {
+      if (attempt >= SH_RETRIES || !isTransientTransportError(error)) throw error;
+      const delayMs = SH_RETRY_DELAY_MS * (attempt + 1);
+      if (deadlineMs - Date.now() <= delayMs) throw error;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+/** Single `sh -c` execution attempt, bounded by the hang guard. */
+async function shOnce(
+  sandbox: MaterializationSandbox,
+  script: string,
+  options: ShOptions,
 ): Promise<SandboxCommandResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
