@@ -1892,6 +1892,12 @@ export class MastraModelOutput<OUTPUT = undefined> extends MastraBase {
 
   #createEventedStream() {
     const self = this;
+    // Holds this subscriber's own detach function once start() registers its
+    // listeners. cancel() must only remove this subscriber's handlers — the
+    // emitter is shared across every concurrent consumer of this output, so
+    // removeAllListeners() here would silently kill every other subscriber
+    // (see #19743).
+    let detach: (() => void) | undefined;
 
     return new ReadableStream<ChunkType<OUTPUT>>({
       start(controller) {
@@ -1919,6 +1925,11 @@ export class MastraModelOutput<OUTPUT = undefined> extends MastraBase {
 
         self.#emitter.on('chunk', chunkHandler);
         self.#emitter.on('finish', finishHandler);
+
+        detach = () => {
+          self.#emitter.off('chunk', chunkHandler);
+          self.#emitter.off('finish', finishHandler);
+        };
       },
 
       pull(_controller) {
@@ -1929,8 +1940,8 @@ export class MastraModelOutput<OUTPUT = undefined> extends MastraBase {
       },
 
       cancel() {
-        // Stream was cancelled, clean up
-        self.#emitter.removeAllListeners();
+        // Only detach this subscriber's own listeners — never the whole emitter.
+        detach?.();
       },
     });
   }
