@@ -264,25 +264,9 @@ const sidebars = {
               label: 'Observability',
             },
             {
-              type: 'category',
+              type: 'doc',
+              id: 'editor/overview',
               label: 'Editor',
-              items: [
-                {
-                  type: 'doc',
-                  id: 'editor/overview',
-                  label: 'Overview',
-                },
-                {
-                  type: 'doc',
-                  id: 'editor/tools',
-                  label: 'Tools',
-                },
-                {
-                  type: 'doc',
-                  id: 'editor/prompts',
-                  label: 'Prompts',
-                },
-              ],
             },
           ],
         },
