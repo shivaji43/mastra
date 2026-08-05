@@ -757,6 +757,11 @@ const sidebars = {
                     },
                     {
                       type: 'doc',
+                      id: 'observability/integrations/exporters/confident-ai',
+                      label: 'Confident AI',
+                    },
+                    {
+                      type: 'doc',
                       id: 'observability/integrations/exporters/datadog',
                       label: 'Datadog',
                     },
