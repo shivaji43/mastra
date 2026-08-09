@@ -30,6 +30,7 @@ import type {
 import { safeClose, safeEnqueue } from './input';
 import { createJsonTextStreamTransformer, createObjectStreamTransformer } from './output-format-handlers';
 import { getTransformedSchema } from './schema';
+import { dedupeStepRequests, rehydrateStepRequests } from './step-request-dedupe';
 
 /**
  * Helper function to create a destructurable version of MastraModelOutput.
@@ -1983,9 +1984,11 @@ export class MastraModelOutput<OUTPUT = undefined> extends MastraBase {
   }
 
   serializeState() {
+    const { steps, requests } = dedupeStepRequests(this.#bufferedSteps);
     return {
       status: this.#status,
-      bufferedSteps: this.#bufferedSteps,
+      bufferedSteps: steps,
+      bufferedStepRequests: requests,
       bufferedReasoningDetails: this.#bufferedReasoningDetails,
       bufferedByStep: this.#bufferedByStep,
       bufferedText: this.#bufferedText,
@@ -2010,7 +2013,7 @@ export class MastraModelOutput<OUTPUT = undefined> extends MastraBase {
 
   deserializeState(state: any) {
     this.#status = state.status;
-    this.#bufferedSteps = state.bufferedSteps;
+    this.#bufferedSteps = rehydrateStepRequests(state.bufferedSteps, state.bufferedStepRequests);
     this.#bufferedReasoningDetails = state.bufferedReasoningDetails;
     this.#bufferedByStep = state.bufferedByStep;
     this.#bufferedText = state.bufferedText;
