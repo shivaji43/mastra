@@ -12,6 +12,7 @@ import {
   baseIterationStateSchema,
   createBaseIterationStateUpdate,
   resolveDurableToolCallConcurrency,
+  executeDurableAgentScorers,
 } from '@mastra/core/agent/durable';
 import type {
   DurableAgenticExecutionOutput,
@@ -461,6 +462,21 @@ export function createInngestDurableAgenticWorkflow(options: InngestDurableAgent
           return finalOutput;
         },
         { id: 'map-final-output' },
+      )
+      // Execute scorers (fire-and-forget, doesn't affect main result)
+      .map(
+        async ({ inputData, getInitData, mastra, requestContext, tracingContext }) => {
+          executeDurableAgentScorers({
+            initData: getInitData() as DurableAgenticWorkflowInput,
+            finalOutput: inputData,
+            mastra,
+            requestContext,
+            tracingContext,
+          });
+
+          return inputData;
+        },
+        { id: 'execute-scorers' },
       )
       .commit()
   );
