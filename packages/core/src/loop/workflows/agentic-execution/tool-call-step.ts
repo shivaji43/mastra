@@ -824,6 +824,7 @@ export function createToolCallStep<Tools extends ToolSet = ToolSet, OUTPUT = und
                   toolCallId: inputData.toolCallId,
                   toolName: inputData.toolName,
                   resumeLabel: options?.resumeLabel,
+                  suspendedToolRunId: options?.runId,
                 },
                 {
                   resumeLabel: inputData.toolCallId,
