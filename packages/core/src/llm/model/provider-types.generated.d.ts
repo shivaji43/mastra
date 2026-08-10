@@ -4921,7 +4921,6 @@ export type ProviderModelsMap = {
     'glm-5-2',
     'gpt-oss-120b',
     'gpt-oss-safeguard-120b',
-    'kimi-k2-6',
     'kimi-k3',
     'llama3-3-70b',
     'nomic-embed-text',
