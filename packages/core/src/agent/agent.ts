@@ -7163,6 +7163,7 @@ export class Agent<
     structuredOutput = false,
     overrideScorers,
     onTitleGenerated,
+    waitUntil,
   }: AgentExecuteOnFinishOptions) {
     const observabilityContext = createObservabilityContext({ currentSpan: agentSpan });
 
@@ -7262,7 +7263,10 @@ export class Agent<
             const userMessage = this.getMostRecentUserMessage(threadUiMessages);
 
             if (userMessage) {
-              void this.genTitle(
+              // Fire-and-forget so generate()/stream() stay fast. On serverless
+              // runtimes that freeze after the response, pass
+              // `serverless.waitUntil` so the platform keeps this promise alive (#20682).
+              const titlePromise = this.genTitle(
                 userMessage,
                 requestContext,
                 observabilityContext,
@@ -7287,6 +7291,12 @@ export class Agent<
                 .catch(error => {
                   this.logger.error('Error persisting generated title:', error);
                 });
+
+              if (typeof waitUntil === 'function') {
+                waitUntil(titlePromise);
+              } else {
+                void titlePromise;
+              }
             }
           }
         }

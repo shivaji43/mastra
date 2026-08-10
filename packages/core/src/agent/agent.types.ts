@@ -1,5 +1,6 @@
 import type { ModelMessage, ToolChoice } from '@internal/ai-sdk-v5';
 import type { ActorSignal } from '../auth/ee';
+import type { WaitUntilFn } from '../channels/wait-until';
 import type { MastraScorer, MastraScorers, ScoringSamplingConfig } from '../evals';
 import type { SystemMessage } from '../llm';
 import type { ProviderOptions } from '../llm/model/provider-options';
@@ -488,6 +489,20 @@ export type AgentExecutionOptionsBase<OUTPUT> = {
 
   /** Memory configuration for conversation persistence and retrieval */
   memory?: AgentMemoryOption;
+
+  /**
+   * Serverless runtime helpers. Use these when the platform freezes the
+   * isolate after the HTTP response so detached finish-time work (e.g. thread
+   * title generation) would otherwise be dropped.
+   */
+  serverless?: {
+    /**
+     * Platform `waitUntil` (Vercel `@vercel/functions`, Cloudflare
+     * `ExecutionContext.waitUntil`, etc.). Registers fire-and-forget finish
+     * work so the isolate stays alive until it settles.
+     */
+    waitUntil?: WaitUntilFn;
+  };
 
   /** Unique identifier for this execution run */
   runId?: string;
