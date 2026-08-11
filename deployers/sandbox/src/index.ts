@@ -1,6 +1,6 @@
 export { SandboxDeployer } from './deployer';
 export { deployToSandbox, buildLaunchScript } from './engine';
-export { deployWorkerToSandbox } from './worker';
+export { attachWorkerDeployment, deployWorkerToSandbox } from './worker';
 export { SandboxWorkerCapabilityError } from './types';
 export { updateEdgeConfigAlias } from './alias';
 export { readDeploymentManifest, writeDeploymentManifest, MANIFEST_FILENAME } from './manifest';
@@ -11,8 +11,10 @@ export type {
   SandboxDeployment,
   SandboxDeploymentManifest,
   DeployToSandboxOptions,
+  AttachWorkerDeploymentOptions,
   DeployWorkerToSandboxOptions,
   SandboxWorkerInput,
+  SandboxWorkerExecution,
   SandboxWorkerDeployment,
   SandboxWorkerResourceLimitCapability,
   SandboxWorkerResourceLimits,
