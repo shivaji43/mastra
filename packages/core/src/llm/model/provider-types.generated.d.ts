@@ -3580,6 +3580,7 @@ export type ProviderModelsMap = {
     'kwaipilot/kat-coder-air-v2.5',
     'kwaipilot/kat-coder-pro-v2',
     'kwaipilot/kat-coder-pro-v2.5',
+    'liquid/lfm-2.5-2.6b:free',
     'mancer/weaver',
     'meituan/longcat-2.0',
     'meta-llama/llama-3.1-70b-instruct',
