@@ -1,5 +1,30 @@
 # @mastra/core
 
+## 1.59.0-alpha.1
+
+### Patch Changes
+
+- Fixed session-deleted listeners missing their notification when a session teardown failed while releasing its thread lock. The controller deregisters the session either way, so `onSessionDeleted` now always fires and listeners no longer hold on to a dead session. ([#21358](https://github.com/mastra-ai/mastra/pull/21358))
+
+- Added an option to limit language servers retained by a workspace. Workspaces remain unlimited when the option is omitted. ([#21186](https://github.com/mastra-ai/mastra/pull/21186))
+
+  ```ts
+  const workspace = new Workspace({
+    lsp: { maxOpenClients: 4 },
+  });
+  ```
+
+  When using `workspace.lsp.prepareQuery()`, call `release()` on the returned query after closing the file.
+
+- Fixed output processors being skipped when the model provider throws an error. Output processors now run on failed streams with finishReason set to 'error', restoring the behavior from 1.55.0, so custom processors can observe and react to error terminals. Message history still avoids saving a user message when the provider fails before producing any output, so failed turns don't leave orphaned input in the conversation history. Cancelled (aborted) streams continue to skip output processors. Fixes #21292. ([#21370](https://github.com/mastra-ai/mastra/pull/21370))
+
+- Fixed an issue where multiple agents sharing one storage instance would all respond in a subscribed channel thread instead of just the agent that was mentioned. Each agent now tracks its own channel threads and subscriptions. ([#21288](https://github.com/mastra-ai/mastra/pull/21288))
+
+- Fixed gateway authentication so empty header objects fall back to API keys and are not reported as valid credentials. ([#21266](https://github.com/mastra-ai/mastra/pull/21266))
+
+- Updated dependencies [[`cf418b6`](https://github.com/mastra-ai/mastra/commit/cf418b65efb81997e9b8dc7638eee363c5d96c96)]:
+  - @mastra/schema-compat@1.3.7-alpha.0
+
 ## 1.59.0-alpha.0
 
 ### Minor Changes

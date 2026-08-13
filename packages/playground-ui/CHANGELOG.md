@@ -1,5 +1,33 @@
 # @mastra/playground-ui
 
+## 48.1.0-alpha.1
+
+### Minor Changes
+
+- Added animated Sankey layout transitions for column changes. Pass a changing perspective key to opt in: ([#20768](https://github.com/mastra-ai/mastra/pull/20768))
+
+  ```tsx
+  <SankeyChart geometryTransitionKey={columns.map(column => column.id).join(':')} />
+  ```
+
+- `CopyButton` takes a `showToast` option, so a button whose icon already flips to a checkmark on success can skip the toast on top of it. ([#21350](https://github.com/mastra-ai/mastra/pull/21350))
+
+  ```tsx
+  <CopyButton content={message} showToast={false} />
+  ```
+
+### Patch Changes
+
+- Reworked the markdown renderer's typography. Headings, lists, blockquotes, tables and horizontal rules now follow one consistent rhythm, list markers and task-list checkboxes render as expected, and long tables scroll instead of stretching their container. ([#21355](https://github.com/mastra-ai/mastra/pull/21355))
+
+  Fenced code blocks now get syntax highlighting, a copy button and a frame of their own, and yaml, diff, css, html, xml and sql joined the highlighted languages, so fences in those languages are no longer plain text.
+
+- Updated dependencies [[`aa3e7be`](https://github.com/mastra-ai/mastra/commit/aa3e7be30f8addb0278ea74429f4df054517a287), [`3cc1876`](https://github.com/mastra-ai/mastra/commit/3cc18767fb47ce9830ac4623a2304e2b09591605), [`3cc1876`](https://github.com/mastra-ai/mastra/commit/3cc18767fb47ce9830ac4623a2304e2b09591605), [`90822db`](https://github.com/mastra-ai/mastra/commit/90822dba08fb2169c518e4a6d7f127c098eb46b8), [`3700208`](https://github.com/mastra-ai/mastra/commit/37002080c7838267803a7e579a7d58b908d62f36), [`8b7131e`](https://github.com/mastra-ai/mastra/commit/8b7131eb0407f58f5205e68fb27b81f026488f28), [`79c4f82`](https://github.com/mastra-ai/mastra/commit/79c4f8295f568752eeadf8a9b50010a7d9ec06ae)]:
+  - @mastra/core@1.59.0-alpha.1
+  - @mastra/react@1.4.3-alpha.1
+  - @mastra/client-js@1.39.1-alpha.1
+  - @mastra/memory@1.26.2-alpha.0
+
 ## 48.1.0-alpha.0
 
 ### Minor Changes

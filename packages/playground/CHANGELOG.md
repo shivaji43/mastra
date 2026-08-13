@@ -1,5 +1,20 @@
 # @internal/playground
 
+## 1.25.0-alpha.1
+
+### Minor Changes
+
+- Added multi-level Trace Intelligence drill-downs for themes and Noise, with removable filters and filtered detail examples. ([#20768](https://github.com/mastra-ai/mastra/pull/20768))
+
+### Patch Changes
+
+- Updated dependencies [[`aa3e7be`](https://github.com/mastra-ai/mastra/commit/aa3e7be30f8addb0278ea74429f4df054517a287), [`311bd72`](https://github.com/mastra-ai/mastra/commit/311bd7284625e232b6d5ea287ebd1869ff505323), [`3cc1876`](https://github.com/mastra-ai/mastra/commit/3cc18767fb47ce9830ac4623a2304e2b09591605), [`3cc1876`](https://github.com/mastra-ai/mastra/commit/3cc18767fb47ce9830ac4623a2304e2b09591605), [`90822db`](https://github.com/mastra-ai/mastra/commit/90822dba08fb2169c518e4a6d7f127c098eb46b8), [`0f56121`](https://github.com/mastra-ai/mastra/commit/0f561219a549047361bdf20b5e7b86fe47e6cbe6), [`3700208`](https://github.com/mastra-ai/mastra/commit/37002080c7838267803a7e579a7d58b908d62f36), [`8b7131e`](https://github.com/mastra-ai/mastra/commit/8b7131eb0407f58f5205e68fb27b81f026488f28), [`cf418b6`](https://github.com/mastra-ai/mastra/commit/cf418b65efb81997e9b8dc7638eee363c5d96c96), [`79c4f82`](https://github.com/mastra-ai/mastra/commit/79c4f8295f568752eeadf8a9b50010a7d9ec06ae), [`d4ebf66`](https://github.com/mastra-ai/mastra/commit/d4ebf666f8f09e1839c16b73dc76f9d6d699ebba)]:
+  - @mastra/core@1.59.0-alpha.1
+  - @mastra/playground-ui@48.1.0-alpha.1
+  - @mastra/react@1.4.3-alpha.1
+  - @mastra/schema-compat@1.3.7-alpha.0
+  - @mastra/client-js@1.39.1-alpha.1
+
 ## 1.24.1-alpha.0
 
 ### Patch Changes
