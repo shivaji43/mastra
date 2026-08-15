@@ -586,6 +586,7 @@ export type ProviderModelsMap = {
     'TEE/gpt-oss-120b',
     'TEE/gpt-oss-20b',
     'TEE/kimi-k2.6',
+    'TEE/kimi-k2.7-code',
     'TEE/kimi-k3',
     'TEE/llama3-3-70b',
     'TEE/muse-glimmer-30b',
