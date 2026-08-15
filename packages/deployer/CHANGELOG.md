@@ -1,5 +1,15 @@
 # @mastra/deployer
 
+## 1.60.0-alpha.5
+
+### Patch Changes
+
+- Fixed `mastra build` pinning the wrong dependency version when the app and its parent workspace install different copies. The build now starts package lookup from the app directory, so the generated `.mastra/output/package.json` uses the app's installed version and the deployed server starts correctly. ([#21213](https://github.com/mastra-ai/mastra/pull/21213))
+
+- Updated dependencies [[`74e5bd3`](https://github.com/mastra-ai/mastra/commit/74e5bd315b8b3a1e04cb6cf480bb0f5fc4951dc8)]:
+  - @mastra/core@1.60.0-alpha.5
+  - @mastra/server@1.60.0-alpha.5
+
 ## 1.60.0-alpha.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @mastra/core
 
+## 1.60.0-alpha.5
+
+### Patch Changes
+
+- Fixed workflow cancellation so sleep() and sleepUntil() stop promptly without overwriting the canceled run status. ([#21570](https://github.com/mastra-ai/mastra/pull/21570))
+
 ## 1.60.0-alpha.4
 
 ### Minor Changes
