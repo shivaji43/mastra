@@ -990,7 +990,6 @@ export type ProviderModelsMap = {
     'qwen-turbo',
     'qwen/Qwen2.5-Coder-32B-Instruct',
     'qwen/Qwen3-235B-A22B-Instruct-2507',
-    'qwen/Qwen3-235B-A22B-Instruct-2507-TEE',
     'qwen/Qwen3-235B-A22B-Thinking-2507',
     'qwen/Qwen3-8B',
     'qwen/Qwen3-Next-80B-A3B-Instruct',
@@ -1121,6 +1120,8 @@ export type ProviderModelsMap = {
     'zai-org/glm-5.1:thinking',
     'zai-org/glm-5.2',
     'zai-org/glm-5.2:thinking',
+    'zai-org/glm-5.3',
+    'zai-org/glm-5.3:thinking',
     'zai-org/glm-5:thinking',
     'zai-org/glm-latest',
   ];

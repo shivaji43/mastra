@@ -478,6 +478,8 @@
     "zai-org/glm-5.1:thinking",
     "zai-org/glm-5.2",
     "zai-org/glm-5.2:thinking",
+    "zai-org/glm-5.3",
+    "zai-org/glm-5.3:thinking",
     "zai-org/glm-5:thinking"
   ],
   "structuredOutput": [
@@ -673,7 +675,6 @@
     "perceptron/perceptron-mk1",
     "pokee-isaac",
     "qwen/Qwen3-235B-A22B-Instruct-2507",
-    "qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
     "qwen/Qwen3-Next-80B-A3B-Instruct",
     "qwen/qwen3-235b-a22b",
     "qwen/qwen3-coder",
@@ -726,6 +727,8 @@
     "zai-org/glm-5.1:thinking",
     "zai-org/glm-5.2",
     "zai-org/glm-5.2:thinking",
+    "zai-org/glm-5.3",
+    "zai-org/glm-5.3:thinking",
     "zai-org/glm-5:thinking",
     "zai-org/glm-latest"
   ]
