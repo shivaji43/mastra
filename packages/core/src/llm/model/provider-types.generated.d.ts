@@ -735,6 +735,7 @@ export type ProviderModelsMap = {
     'deepseek/deepseek-v4-pro-cheaper:thinking',
     'deepseek/deepseek-v4-pro:thinking',
     'dmind/dmind-1-mini',
+    'dots-studio/dots-3-note-preview:free',
     'doubao-1.5-pro-256k',
     'doubao-1.5-pro-32k',
     'doubao-1.5-vision-pro-32k',
