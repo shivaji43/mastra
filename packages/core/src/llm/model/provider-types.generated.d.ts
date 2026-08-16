@@ -574,6 +574,7 @@ export type ProviderModelsMap = {
     'TEE/deepseek-v3.2',
     'TEE/deepseek-v4-flash',
     'TEE/deepseek-v4-pro-0813',
+    'TEE/deepseek-v4-pro-0813:thinking',
     'TEE/gemma-3-27b-it',
     'TEE/gemma-4-26b-a4b-uncensored',
     'TEE/gemma-4-31b-it',
