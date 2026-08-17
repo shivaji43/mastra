@@ -10,7 +10,7 @@ import TabItem from "@theme/TabItem";
 
 # Tools
 
-Agents use tools to call APIs or query databases. They can also run custom functions from your codebase. Tools give agents capabilities beyond language generation by providing structured access to data and performing clearly defined operations. You can also load tools from remote [MCP servers](/docs/mcp/overview) to expand an agent's capabilities.
+Agents use tools to call APIs or query databases. They can also run custom functions from your codebase. Tools give agents capabilities beyond language generation by providing structured access to data and performing clearly defined operations. You can also load tools from remote [MCP servers](/docs/connections/mcp) to expand an agent's capabilities.
 
 <Inject>
   **For AI agents:** Run `npx mastra api tool execute weather-tool '{"location":"San Francisco"}'` to test this tool directly instead of writing a temporary script. The command requires a running Mastra server; start the local server with `npx mastra dev`, or pass the reachable server's base URL with `--url`. Run `npx mastra api tool execute --schema` before constructing different input. Install Mastra's skill with `npx skills add mastra-ai/skills --skill mastra` for complete API CLI discovery, targeting, schema, authentication, and error-handling guidance.
@@ -178,7 +178,7 @@ export const weatherAgent = new Agent({
 
 ## Agents as tools
 
-Add subagents through the `agents` configuration to create a [supervisor](/docs/capabilities/subagents). Mastra converts each subagent to an `agent-<key>` tool. Include a `description` on each subagent so the supervisor knows when to delegate.
+Add subagents through the `agents` configuration to create a [supervisor](/docs/subagents). Mastra converts each subagent to an `agent-<key>` tool. Include a `description` on each subagent so the supervisor knows when to delegate.
 
 ```typescript title="src/mastra/agents/supervisor.ts"
 import { Agent } from '@mastra/core/agent'
@@ -623,7 +623,7 @@ for await (const chunk of stream.fullStream) {
 }
 ```
 
-`askUserTool` supports free-text, single-select (`options` array), and multi-select (`selectionMode: 'multi_select'`) prompts. Pair it with `autoResumeSuspendedTools` so the agent resumes automatically from the user's next chat message. See [Automatic tool resumption](/docs/agents/agent-approval#automatic-tool-resumption) for details.
+`askUserTool` supports free-text, single-select (`options` array), and multi-select (`selectionMode: 'multi_select'`) prompts. Pair it with `autoResumeSuspendedTools` so the agent resumes automatically from the user's next chat message. See [Automatic tool resumption](/docs/agents/human-in-the-loop#automatic-tool-resumption) for details.
 
 ### Submit a plan for review
 
@@ -661,7 +661,7 @@ const agent = new Agent({
 })
 ```
 
-Only one task can be `in_progress` at a time. The list is stored in the thread-scoped `threadState` storage domain and projected onto the agent's [state-signal](/docs/long-running-agents/signals) lane, so it survives observational-memory truncation. See the [Task tools reference](/reference/tools/task-tools) for full schemas.
+Only one task can be `in_progress` at a time. The list is stored in the thread-scoped `threadState` storage domain and projected onto the agent's [state-signal](/docs/harness/signals) lane, so it survives observational-memory truncation. See the [Task tools reference](/reference/tools/task-tools) for full schemas.
 
 The [AgentController](/docs/harness/agent-controller) automatically includes all built-in tools in every mode, you don't need to add them manually. See [Tool approvals](/docs/harness/agent-controller#approve-tools-and-resume-suspensions) for AgentController-specific behavior.
 
@@ -669,11 +669,11 @@ The [AgentController](/docs/harness/agent-controller) automatically includes all
 
 - [`createTool` reference](/reference/tools/create-tool)
 - [`Agent.generate()` reference](/reference/agents/generate): Runtime options for tool selection, steps, and callbacks
-- [Background tasks](/docs/long-running-agents/background-tasks): Run long-running tools without blocking the agent loop
-- [MCP overview](/docs/mcp/overview)
+- [Background tasks](/docs/harness/background-tasks): Run long-running tools without blocking the agent loop
+- [MCP overview](/docs/connections/mcp)
 - [Dynamic tool search](/reference/processors/tool-search-processor): Load tools on demand for agents with large tool libraries
 - [Tools with structured output](/docs/agents/structured-output#combine-tools-and-structured-output): Model compatibility when combining tools and structured output
-- [Agent approval](/docs/agents/agent-approval)
+- [Agent approval](/docs/agents/human-in-the-loop)
 - [`askUserTool` reference](/reference/tools/ask-user-tool)
 - [`submitPlanTool` reference](/reference/tools/submit-plan-tool)
 - [Task tools reference](/reference/tools/task-tools)

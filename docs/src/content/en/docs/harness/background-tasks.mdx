@@ -24,7 +24,7 @@ For tool calls that return quickly, foreground execution using `agent.stream()` 
 
 :::note
 
-Background tasks require a configured [storage](/docs/storage/overview) backend on the Mastra instance. Tasks are persisted so they survive process restarts.
+Background tasks require a configured [storage](/docs/storage) backend on the Mastra instance. Tasks are persisted so they survive process restarts.
 
 :::
 
@@ -135,7 +135,7 @@ If the agent has `backgroundTasks.disabled: true`, every tool call runs synchron
 
 ## Background tasks related stream chunks
 
-When a tool call dispatches as a background task, two streams may surface lifecycle events for it: the agent's own stream and the [`backgroundTaskManager.stream()`](/docs/long-running-agents/background-tasks#subscribe-to-all-task-events) SSE stream. Each stream covers a different set of chunk types:
+When a tool call dispatches as a background task, two streams may surface lifecycle events for it: the agent's own stream and the [`backgroundTaskManager.stream()`](/docs/harness/background-tasks#subscribe-to-all-task-events) SSE stream. Each stream covers a different set of chunk types:
 
 | Chunk type | When it fires | Emitted by |
 | - | - | - |
@@ -394,7 +394,7 @@ These read from storage rather than the pubsub stream, so they're suitable for p
 
 - [`Agent.stream()` reference](/reference/streaming/agents/stream)
 - [backgroundTasks configuration reference](/reference/configuration#backgroundtasks)
-- [Durable agents](./durable-agents)
-- [Supervisor agents](/docs/capabilities/subagents)
+- [Durable agents](../harness/durable-agents)
+- [Supervisor agents](/docs/subagents)
 - [Stream chunk types](/reference/streaming/ChunkType)
-- [Storage](/docs/storage/overview)
+- [Storage](/docs/storage)
