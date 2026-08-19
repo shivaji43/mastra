@@ -416,6 +416,7 @@ export function assembleFactoryApiRoutes(deps: FactoryApiRoutesDeps): ApiRoute[]
       authStorage: deps.authStorage,
       modelCredentials: deps.domains.modelCredentials,
       modelPacks: deps.domains.modelPacks,
+      sourceControlSessions: deps.sourceControlStorage.forIntegration('github').sessions,
       memorySettings: deps.domains.memorySettings,
       customProviders: deps.domains.customProviders,
       features: { knowledge: deps.knowledgeEnabled },
