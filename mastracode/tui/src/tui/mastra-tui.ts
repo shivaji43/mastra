@@ -150,6 +150,7 @@ export class MastraTUI {
   private cleanupPluginReloadListener?: () => void;
   private cleanupPluginUpdateListener?: () => void;
   private lastStreamError: string | null = null;
+  private stopped = false;
   /**
    * Text submitted while the main loop was busy (running a slash command or a
    * shell passthrough) and so was not waiting on `getUserInput`. The editor's
@@ -250,9 +251,15 @@ export class MastraTUI {
 
     setupKeyboardShortcuts(this.state, {
       stop: () => this.stop(),
+      exit: exitCode => this.exit(exitCode),
       doubleCtrlCMs: MastraTUI.DOUBLE_CTRL_C_MS,
       queueFollowUpMessage: text => this.queueFollowUpMessage(text),
     });
+  }
+
+  private exit(exitCode: number): void {
+    if (this.state.options.exit) this.state.options.exit(exitCode);
+    else process.exit(exitCode);
   }
 
   // ===========================================================================
@@ -531,6 +538,8 @@ export class MastraTUI {
    * Stop the TUI and clean up.
    */
   stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
     this.stopCaffeinate();
 
     // Run SessionEnd hooks (best-effort, don't await)
@@ -623,6 +632,7 @@ export class MastraTUI {
     // Setup key handlers
     this.cleanupKeyHandlers = setupKeyHandlers(this.state, {
       stop: () => this.stop(),
+      exit: exitCode => this.exit(exitCode),
       doubleCtrlCMs: MastraTUI.DOUBLE_CTRL_C_MS,
     });
 
@@ -1210,12 +1220,14 @@ export class MastraTUI {
       pluginManager: this.state.pluginManager,
       analytics: this.state.analytics,
       authStorage: this.state.authStorage,
+      processMemoryDiagnostics: this.state.options.processMemoryDiagnostics,
       knowledgeInspector: this.state.options.knowledgeInspector,
       customSlashCommands: this.state.customSlashCommands,
       showInfo: msg => showInfo(this.state, msg),
       showError: msg => showError(this.state, msg),
       updateStatusLine: () => updateStatusLine(this.state),
       stop: () => this.stop(),
+      exit: exitCode => this.exit(exitCode),
       getResolvedWorkspace: () => this.getResolvedWorkspace(),
       addUserMessage: msg => addUserMessage(this.state, msg),
       renderExistingMessages: () => this.renderExistingMessagesAndSeedIdleCounter(),
@@ -1701,7 +1713,7 @@ export class MastraTUI {
         // Printed after TUI teardown — a message rendered inside it is lost in the exit race.
         this.stop();
         console.info(outcome.message);
-        process.exit(0);
+        this.exit(0);
       } else {
         showError(this.state, outcome.message);
       }
