@@ -31,6 +31,7 @@ import {
 } from '@mastra/code-sdk/utils/update-check';
 import type { AgentControllerEvent, MastraDBMessage } from '@mastra/core/agent-controller';
 import type { Workspace } from '@mastra/core/workspace';
+import { disposeAssistantRenderState } from './assistant-render-registry.js';
 import { insertChatComponentWithBoundarySpacing } from './chat-boundary-reconciliation.js';
 import { dispatchSlashCommand } from './command-dispatch.js';
 import { startGoalWithDefaults } from './commands/goal.js';
@@ -574,6 +575,7 @@ export class MastraTUI {
       this.state.unsubscribe();
     }
     this.state.renderScheduler?.dispose();
+    disposeAssistantRenderState(this.state);
     this.state.ui.stop();
   }
 
