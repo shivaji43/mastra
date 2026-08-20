@@ -5470,6 +5470,7 @@
         "minimax-m3",
         "minimax-m3-free",
         "muse-spark-1.2",
+        "muse-spark-1.2-contributor-free",
         "nemotron-3-super-free",
         "nemotron-3-ultra-free",
         "nemotron-3.5-lightning-free",
@@ -5551,6 +5552,9 @@
           "npm": "@ai-sdk/anthropic"
         },
         "gpt-5.3-codex-spark": {
+          "npm": "@ai-sdk/openai"
+        },
+        "muse-spark-1.2-contributor-free": {
           "npm": "@ai-sdk/openai"
         },
         "gpt-5.2": {
@@ -5648,6 +5652,7 @@
         "kimi-k2",
         "kimi-k2-thinking",
         "kimi-k2.5-free",
+        "laguna-s-2.1-free",
         "ling-2.6-flash-free",
         "ling-3.0-flash-free",
         "ling-3.0-tiny-free",
@@ -7349,6 +7354,7 @@
         "glm-5",
         "glm-5.1",
         "glm-5.2",
+        "glm-5.2-fast",
         "glm-5.3",
         "gpt-3.5-turbo",
         "gpt-4",
@@ -12709,6 +12715,7 @@
       "minimax-m3",
       "minimax-m3-free",
       "muse-spark-1.2",
+      "muse-spark-1.2-contributor-free",
       "nemotron-3-super-free",
       "nemotron-3-ultra-free",
       "nemotron-3.5-lightning-free",
@@ -14138,6 +14145,7 @@
       "glm-5",
       "glm-5.1",
       "glm-5.2",
+      "glm-5.2-fast",
       "glm-5.3",
       "gpt-3.5-turbo",
       "gpt-4",
