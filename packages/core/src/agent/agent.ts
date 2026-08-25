@@ -5442,6 +5442,7 @@ export class Agent<
 
                 result = {
                   text: generateResult.text,
+                  finishReason: generateResult.finishReason,
                   subAgentThreadId: effectiveGenerateThreadId,
                   subAgentResourceId: effectiveGenerateResourceId,
                   subAgentToolResults,
@@ -5582,9 +5583,11 @@ export class Agent<
                 // Use streamResult.text (a delayed promise) which resolves to the
                 // output-processor-modified text, rather than the raw accumulated text-deltas.
                 const processedText = await streamResult.text;
+                const subAgentFinishReason = await streamResult.finishReason;
                 const subAgentUsage = await streamResult.usage;
                 result = {
                   text: processedText,
+                  finishReason: subAgentFinishReason,
                   subAgentThreadId: effectiveStreamThreadId,
                   subAgentResourceId: effectiveStreamResourceId,
                   subAgentToolResults,
