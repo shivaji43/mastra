@@ -1,5 +1,6 @@
 import type { MastraDBMessage } from '@mastra/core/agent/message-list';
 import { useRevealedParts } from '@mastra/playground-ui/components/ai/message-reveal';
+import { Arriving } from '@mastra/playground-ui/components/Arrival';
 import { Button } from '@mastra/playground-ui/components/Button';
 import { useCopyToClipboard } from '@mastra/playground-ui/hooks/use-copy-to-clipboard';
 import { cn } from '@mastra/playground-ui/utils/cn';
@@ -218,9 +219,21 @@ export const MessageRow = forwardRef<HTMLDivElement, MessageRowProps>(
     const sharedRenderers = useMemo<MessageRenderers>(
       () => ({
         Reasoning: part => <ReasoningPartRenderer part={part} />,
-        Data: part => <DataPartRenderer part={part} />,
-        ToolInvocation: part => <ToolInvocationPartRenderer part={part} metadata={metadata} dataParts={dataParts} />,
-        DynamicTool: part => <DynamicToolPartRenderer part={part} metadata={metadata} dataParts={dataParts} />,
+        Data: part => (
+          <Arriving>
+            <DataPartRenderer part={part} />
+          </Arriving>
+        ),
+        ToolInvocation: part => (
+          <Arriving>
+            <ToolInvocationPartRenderer part={part} metadata={metadata} dataParts={dataParts} />
+          </Arriving>
+        ),
+        DynamicTool: part => (
+          <Arriving>
+            <DynamicToolPartRenderer part={part} metadata={metadata} dataParts={dataParts} />
+          </Arriving>
+        ),
       }),
       [metadata, dataParts],
     );
