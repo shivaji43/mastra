@@ -1,14 +1,17 @@
 import { generateTypes } from '@internal/types-builder';
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm', 'cjs'],
+  fixedExtension: false,
+  nodeProtocol: 'strip',
   clean: true,
   dts: false,
-  splitting: true,
   treeshake: {
-    preset: 'smallest',
+    moduleSideEffects: false,
+    propertyReadSideEffects: false,
+    unknownGlobalSideEffects: false,
   },
   sourcemap: true,
   onSuccess: async () => {
