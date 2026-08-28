@@ -773,6 +773,7 @@
     "z-ai/glm-5.1",
     "z-ai/glm-5.2",
     "z-ai/glm-5.2:free",
+    "z-ai/glm-5.3",
     "z-ai/glm-5.3-flash",
     "~anthropic/claude-fable-latest",
     "~anthropic/claude-haiku-latest",
@@ -784,6 +785,7 @@
     "~moonshotai/kimi-latest",
     "~openai/gpt-latest",
     "~openai/gpt-mini-latest",
-    "~x-ai/grok-latest"
+    "~x-ai/grok-latest",
+    "~z-ai/glm-latest"
   ]
 }
