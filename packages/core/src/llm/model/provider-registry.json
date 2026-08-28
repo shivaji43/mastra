@@ -1567,6 +1567,7 @@
         "qwen3.6-plus",
         "qwen3.7-max",
         "qwen3.7-plus",
+        "qwen3.8-flash",
         "qwen3.8-max",
         "qwen3.8-max-preview",
         "wan2.7-image",
@@ -2323,6 +2324,7 @@
         "tencent/hy-mt2-7b",
         "tencent/hy3",
         "tencent/hy3-preview",
+        "tencent/hy4-preview",
         "thedrummer/cydonia-24b-v4.1",
         "thedrummer/skyfall-36b-v2",
         "thedrummer/unslopnemo-12b",
@@ -2571,6 +2573,7 @@
         "qwen/qwen3.7-flash",
         "qwen/qwen3.7-max",
         "qwen/qwen3.7-plus",
+        "qwen/qwen3.8-flash",
         "qwen/qwen3.8-max",
         "tencent/hy3",
         "x-ai/grok-4.3",
@@ -2584,7 +2587,8 @@
         "z-ai/glm-5-turbo",
         "z-ai/glm-5.1",
         "z-ai/glm-5.2",
-        "z-ai/glm-5.3"
+        "z-ai/glm-5.3",
+        "z-ai/glm-5.3-flash"
       ],
       "docUrl": "https://www.crossmodel.ai/docs",
       "gateway": "models.dev"
@@ -3142,6 +3146,7 @@
         "qwen3.6-plus",
         "qwen3.7-max",
         "qwen3.7-plus",
+        "qwen3.8-flash",
         "qwen3.8-max"
       ],
       "docUrl": "https://opencode.ai/docs/zen",
@@ -3160,6 +3165,9 @@
           "npm": "@ai-sdk/anthropic"
         },
         "minimax-m2.7": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "qwen3.8-flash": {
           "npm": "@ai-sdk/anthropic"
         },
         "minimax-m2.5": {
@@ -7743,7 +7751,6 @@
         "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
         "fireworks_ai/accounts/fireworks/models/muse-glimmer-30b",
         "fireworks_ai/gpt-oss-120b",
-        "fireworks_ai/gpt-oss-20b",
         "flexai/Muse-Glimmer-30B",
         "flexai/Nemotron-3-Super-120B-A12B",
         "flexai/deepseek-v4-flash-0731",
@@ -7787,6 +7794,7 @@
         "mistral/mistral-medium-latest",
         "mistral/mistral-small-2603",
         "mistral/mistral-small-latest",
+        "mistral/voxtral-small-latest",
         "moonshot/kimi-k2.6",
         "moonshot/kimi-k2.7-code",
         "moonshot/kimi-k3",
@@ -8422,6 +8430,7 @@
         "qwen3.6-plus",
         "qwen3.7-max",
         "qwen3.7-plus",
+        "qwen3.8-flash",
         "qwen3.8-max",
         "qwen3.8-max-preview",
         "wan2.7-image",
@@ -8865,6 +8874,7 @@
         "tencent/hy3",
         "tencent/hy3-preview",
         "tencent/hy3:free",
+        "tencent/hy4-preview",
         "thedrummer/cydonia-24b-v4.1",
         "thedrummer/skyfall-36b-v2",
         "thedrummer/unslopnemo-12b",
@@ -9492,6 +9502,7 @@
         "openrouter/tencent/hy-mt2-30b-a3b",
         "openrouter/tencent/hy-mt2-7b",
         "openrouter/tencent/hy3",
+        "openrouter/tencent/hy4-preview",
         "openrouter/thedrummer/cydonia-24b-v4.1",
         "openrouter/thedrummer/skyfall-36b-v2",
         "openrouter/thedrummer/unslopnemo-12b",
@@ -10849,6 +10860,7 @@
       "qwen3.6-plus",
       "qwen3.7-max",
       "qwen3.7-plus",
+      "qwen3.8-flash",
       "qwen3.8-max",
       "qwen3.8-max-preview",
       "wan2.7-image",
@@ -11503,6 +11515,7 @@
       "tencent/hy-mt2-7b",
       "tencent/hy3",
       "tencent/hy3-preview",
+      "tencent/hy4-preview",
       "thedrummer/cydonia-24b-v4.1",
       "thedrummer/skyfall-36b-v2",
       "thedrummer/unslopnemo-12b",
@@ -11661,6 +11674,7 @@
       "qwen/qwen3.7-flash",
       "qwen/qwen3.7-max",
       "qwen/qwen3.7-plus",
+      "qwen/qwen3.8-flash",
       "qwen/qwen3.8-max",
       "tencent/hy3",
       "x-ai/grok-4.3",
@@ -11674,7 +11688,8 @@
       "z-ai/glm-5-turbo",
       "z-ai/glm-5.1",
       "z-ai/glm-5.2",
-      "z-ai/glm-5.3"
+      "z-ai/glm-5.3",
+      "z-ai/glm-5.3-flash"
     ],
     "kenari": [
       "claude-fable-5",
@@ -12085,6 +12100,7 @@
       "qwen3.6-plus",
       "qwen3.7-max",
       "qwen3.7-plus",
+      "qwen3.8-flash",
       "qwen3.8-max"
     ],
     "opper": [
@@ -15186,7 +15202,6 @@
       "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
       "fireworks_ai/accounts/fireworks/models/muse-glimmer-30b",
       "fireworks_ai/gpt-oss-120b",
-      "fireworks_ai/gpt-oss-20b",
       "flexai/Muse-Glimmer-30B",
       "flexai/Nemotron-3-Super-120B-A12B",
       "flexai/deepseek-v4-flash-0731",
@@ -15230,6 +15245,7 @@
       "mistral/mistral-medium-latest",
       "mistral/mistral-small-2603",
       "mistral/mistral-small-latest",
+      "mistral/voxtral-small-latest",
       "moonshot/kimi-k2.6",
       "moonshot/kimi-k2.7-code",
       "moonshot/kimi-k3",
@@ -15745,6 +15761,7 @@
       "qwen3.6-plus",
       "qwen3.7-max",
       "qwen3.7-plus",
+      "qwen3.8-flash",
       "qwen3.8-max",
       "qwen3.8-max-preview",
       "wan2.7-image",
@@ -16124,6 +16141,7 @@
       "tencent/hy3",
       "tencent/hy3-preview",
       "tencent/hy3:free",
+      "tencent/hy4-preview",
       "thedrummer/cydonia-24b-v4.1",
       "thedrummer/skyfall-36b-v2",
       "thedrummer/unslopnemo-12b",
@@ -16676,6 +16694,7 @@
       "openrouter/tencent/hy-mt2-30b-a3b",
       "openrouter/tencent/hy-mt2-7b",
       "openrouter/tencent/hy3",
+      "openrouter/tencent/hy4-preview",
       "openrouter/thedrummer/cydonia-24b-v4.1",
       "openrouter/thedrummer/skyfall-36b-v2",
       "openrouter/thedrummer/unslopnemo-12b",
