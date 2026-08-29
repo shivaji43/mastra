@@ -3008,6 +3008,7 @@ export type ProviderModelsMap = {
     'sakana/fugu-ultra',
     'scx-ai-gp/glm-5.2',
     'scx-ai-gp/glm-5.2-fast',
+    'scx-ai-gp/glm-5.3',
     'scx-ai-gp/glm-5.3-flash',
     'scx-ai-gp/kimi-k2.7-code',
     'scx-ai-gp/kimi-k3',
