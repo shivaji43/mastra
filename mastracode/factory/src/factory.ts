@@ -38,6 +38,7 @@ import {
   getFactoryAuthUserFromContext,
   getFactoryAuthUserId,
 } from './auth.js';
+import { touchFeed } from './feed-events.js';
 import type { FactoryIntegration, IntegrationPostToolContext, IntegrationTools } from './integrations/base.js';
 import type { GithubIntegration } from './integrations/github/integration.js';
 import {
@@ -316,6 +317,9 @@ export class MastraFactory {
     const storage = this.#config.storage;
     const vector = this.#config.vector;
     const pubsub = this.#config.pubsub;
+    // One bus for feed/attention events: a second fallback instance would leave
+    // SSE subscribers and producers on different emitters in single-process runs.
+    const eventBus = pubsub ?? new EventEmitterPubSub();
     // Default auth: honor an explicitly-passed provider (including `null` to
     // disable auth) as-is; otherwise fall back to `MastraAuthStudio`
     // (platform-proxied identity). The default derives its cookie domain
@@ -365,6 +369,7 @@ export class MastraFactory {
     const intakeStorage = storage.registerDomain(new IntakeStorage());
     const auditStorage = storage.registerDomain(new AuditStorage());
     const workItemsStorage = storage.registerDomain(new WorkItemsStorage());
+    workItemsStorage.onAttentionChanged(scope => touchFeed(eventBus, scope));
     const modelCredentialsStorage = storage.registerDomain(new ModelCredentialsStorage(secretEncryption));
     const modelPacksStorage = storage.registerDomain(new ModelPacksStorage());
     const memorySettingsStorage = storage.registerDomain(new MemorySettingsStorage());
@@ -413,7 +418,7 @@ export class MastraFactory {
       projects: factoryProjectsStorage,
       channelIdentity: channelIdentityStorage,
       audit: auditDomain,
-      pubsub: pubsub ?? new EventEmitterPubSub(),
+      pubsub: eventBus,
     });
 
     // The sandbox config is a bare callback constructing a session's sandbox

@@ -19,8 +19,8 @@ export function useFeedEventsConnected(): boolean {
 
 /**
  * Holds the project's feed stream for every surface under the factory route.
- * Frames only name a work item; the comment query refetches through its own
- * authed GET.
+ * A frame carries a work item id at most; the queries it invalidates refetch
+ * through their own authed GET.
  */
 export function FeedEventsProvider({ factoryProjectId, children }: { factoryProjectId: string; children: ReactNode }) {
   const { baseUrl } = useApiConfig();
@@ -36,6 +36,9 @@ export function FeedEventsProvider({ factoryProjectId, children }: { factoryProj
     const abort = new AbortController();
     let retry: ReturnType<typeof setTimeout> | undefined;
 
+    const refreshAttention = () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.factoryAttentionRoot(factoryProjectId) });
+
     const connect = () => {
       streamFeedEvents(
         baseUrl,
@@ -44,16 +47,16 @@ export function FeedEventsProvider({ factoryProjectId, children }: { factoryProj
           onEvent: ({ workItemId }) => {
             // Card counts stay on the board's own 5s poll: a fetch per event
             // would double its load to save under 5s of badge latency.
-            void queryClient.invalidateQueries({ queryKey: queryKeys.workItemCommentsRoot(workItemId) });
-            // Mention and activity rows are written by the same comment
-            // mutation that published this frame; failures and approvals have
-            // no event yet and stay on the attention poll.
-            void queryClient.invalidateQueries({ queryKey: queryKeys.factoryAttentionRoot(factoryProjectId) });
+            if (workItemId) {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.workItemCommentsRoot(workItemId) });
+            }
+            refreshAttention();
           },
           onConnected: () => {
             setConnected(true);
             // Whatever landed while this tab held no stream was never announced.
             void queryClient.invalidateQueries({ queryKey: queryKeys.workItemCommentsAll() });
+            refreshAttention();
           },
         },
         abort.signal,

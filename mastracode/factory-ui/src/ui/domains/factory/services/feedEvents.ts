@@ -3,7 +3,8 @@ import { readSSE } from '../../../lib/readSSE';
 import { RequestError } from './request';
 
 export interface FeedEvent {
-  workItemId: string;
+  /** Absent when the project's attention moved but no work item's comments did. */
+  workItemId?: string;
 }
 
 export async function streamFeedEvents(
@@ -24,7 +25,7 @@ export async function streamFeedEvents(
   await readSSE(response.body, (event, data) => {
     if (event !== 'feed') return;
     const parsed: unknown = JSON.parse(data);
-    if (!isRecord(parsed) || typeof parsed.workItemId !== 'string') return;
-    handlers.onEvent({ workItemId: parsed.workItemId });
+    if (!isRecord(parsed)) return;
+    handlers.onEvent(typeof parsed.workItemId === 'string' ? { workItemId: parsed.workItemId } : {});
   });
 }

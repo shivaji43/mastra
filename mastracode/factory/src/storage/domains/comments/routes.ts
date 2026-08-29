@@ -11,6 +11,7 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 
 import { getFactoryAuthUser } from '../../../auth.js';
+import { feedTopic } from '../../../feed-events.js';
 import type { RouteAuth } from '../../../routes/route.js';
 import type { AuditEmitter } from '../audit/domain.js';
 import type { FactoryProjectsStorage } from '../projects/base.js';
@@ -19,7 +20,6 @@ import { actorFromAuthUser } from './actor.js';
 import type { WorkItemCommentsStorage } from './base.js';
 import { decodeCommentCursor } from './base.js';
 import type { CommentEditor, CommentsDomain } from './domain.js';
-import { feedTopic } from './domain.js';
 import { isRecord, parseCreateCommentBody, parseEditCommentBody, readJson, UUID_RE } from './parse.js';
 import { toWireComment } from './wire.js';
 import type { WireCommentPage } from './wire.js';
@@ -27,6 +27,8 @@ import type { WireCommentPage } from './wire.js';
 const MAX_AUDIT_BODY_SNAPSHOT = 1024;
 /** Comment frames only — proxies drop an idle stream, and `write` can't detect a dead peer. */
 const FEED_KEEPALIVE_MS = 25_000;
+// Ceiling: one broker subscription per open tab, not per project. A per-replica
+// topic multiplexer is the upgrade path if tab counts ever make that hurt.
 
 export interface CommentRouteDependencies {
   domain: CommentsDomain;
@@ -299,10 +301,10 @@ export function buildCommentRoutes(dependencies: CommentRouteDependencies): ApiR
         const topic = feedTopic(tenant.orgId, projectId);
         return streamSSE(c, async stream => {
           const onEvent: EventCallback = async event => {
-            const data = event.data;
-            if (!isRecord(data) || typeof data.workItemId !== 'string') return;
             if (stream.aborted) return;
-            await stream.writeSSE({ event: 'feed', data: JSON.stringify({ workItemId: data.workItemId }) });
+            const data = event.data;
+            const workItemId = isRecord(data) && typeof data.workItemId === 'string' ? data.workItemId : undefined;
+            await stream.writeSSE({ event: 'feed', data: JSON.stringify(workItemId ? { workItemId } : {}) });
           };
           // Claimed before any await: `onAbort` handlers registered after the
           // reader is gone never run, and a broker subscribe is a round trip.

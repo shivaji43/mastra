@@ -2,6 +2,7 @@ import { skipToken, useInfiniteQuery, useMutation, useQuery, useQueryClient } fr
 
 import { useApiConfig } from '../api/config';
 import { queryKeys } from '../api/keys';
+import { useFeedEventsConnected } from '../ui/domains/factory/context/FeedEventsProvider';
 import {
   fetchFactoryAttention,
   markAllFactoryAttentionRead,
@@ -14,7 +15,8 @@ import type {
   FactoryAttentionView,
 } from '../ui/domains/factory/services/attention';
 
-const ATTENTION_POLL_MS = 5_000;
+/** The badge's standing safety net, and the page's fallback while its stream is down. */
+export const ATTENTION_POLL_MS = 5_000;
 
 export function useFactoryAttention(
   factoryProjectId: string | undefined,
@@ -40,6 +42,7 @@ export function useFactoryAttentionHistory(
   search: string,
 ) {
   const { baseUrl } = useApiConfig();
+  const connected = useFeedEventsConnected();
   const initialPageParam: string | undefined = undefined;
   const queryFn = factoryProjectId
     ? ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) =>
@@ -50,7 +53,9 @@ export function useFactoryAttentionHistory(
     queryFn,
     initialPageParam,
     getNextPageParam: lastPage => lastPage.nextCursor,
-    refetchInterval: ATTENTION_POLL_MS,
+    // The stream announces every attention change; the poll only bridges
+    // the window where no stream is up.
+    refetchInterval: connected ? false : ATTENTION_POLL_MS,
     staleTime: 2_000,
   });
 }

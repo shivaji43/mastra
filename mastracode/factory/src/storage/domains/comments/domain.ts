@@ -9,6 +9,7 @@
 import type { PubSub } from '@mastra/core/events';
 import type { ApiRoute } from '@mastra/core/server';
 
+import { touchFeed } from '../../../feed-events.js';
 import type { RouteAuth } from '../../../routes/route.js';
 import type { AuditEmitter } from '../audit/domain.js';
 import type { ChannelIdentityStorage } from '../channel-identity/base.js';
@@ -36,11 +37,6 @@ export interface FactoryRosterMember {
 
 export interface OrganizationMembersProvider {
   listOrganizationMembers(orgId: string): Promise<FactoryRosterMember[]>;
-}
-
-/** Project-scoped feed channel; dotted to match the pubsub topic convention. */
-export function feedTopic(orgId: string, factoryProjectId: string): string {
-  return `factory.feed.${orgId}.${factoryProjectId}`;
 }
 
 export interface CommentsDomainOptions {
@@ -150,24 +146,11 @@ export class CommentsDomain {
 
   /**
    * The one seam every feed mutation routes through — future
-   * `WorkItemFeedIngest` impls included. A dead broker never fails a write.
+   * `WorkItemFeedIngest` impls included.
    */
   async #touchFeed(scope: { orgId: string; factoryProjectId: string; workItemId: string }): Promise<void> {
     await this.#comments.refreshWorkItemFeedActivity(scope);
-    // Never awaited: a slow broker would hold the author's response hostage,
-    // and the fallback poll already covers a publish that never lands.
-    this.#pubsub
-      .publish(feedTopic(scope.orgId, scope.factoryProjectId), {
-        type: 'factory.feed.touched',
-        runId: scope.workItemId,
-        data: { workItemId: scope.workItemId },
-      })
-      .catch((err: unknown) => {
-        console.warn('[Comments] Failed to publish a feed touch', {
-          workItemId: scope.workItemId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
+    touchFeed(this.#pubsub, scope, scope.workItemId);
   }
 
   async createComment(input: CreateCommentServiceInput): Promise<CreateCommentServiceResult> {

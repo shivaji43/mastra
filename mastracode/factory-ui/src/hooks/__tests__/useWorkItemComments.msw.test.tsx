@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 
 import { server } from '../../../e2e/ui/msw-server';
-import { renderHookWithProviders, waitForMutationsIdle, TEST_BASE_URL } from '../../../e2e/ui/render';
+import { renderHookWithProviders, TEST_BASE_URL, waitForMutationsIdle } from '../../../e2e/ui/render';
 import { queryKeys } from '../../api/keys';
 import { FeedEventsProvider, useFeedEventsConnected } from '../../ui/domains/factory/context/FeedEventsProvider';
 import type { WorkItemComment, WorkItemCommentPage } from '../../ui/domains/factory/services/commentsWire';
@@ -120,7 +120,7 @@ describe('useWorkItemComments', () => {
       }),
     );
 
-    const { result } = renderHookWithProviders(() => ({
+    const { result, client } = renderHookWithProviders(() => ({
       panel: useWorkItemComments({ workItemId: ITEM_ID }),
       thread: useWorkItemComments({ workItemId: ITEM_ID }),
     }));

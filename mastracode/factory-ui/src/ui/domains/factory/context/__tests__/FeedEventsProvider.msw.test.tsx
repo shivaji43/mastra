@@ -14,6 +14,7 @@ import { FeedEventsProvider, useFeedEventsConnected } from '../FeedEventsProvide
 const PROJECT_ID = 'project-1';
 const ITEM_ID = 'item-1';
 const COMMENTS_URL = `${TEST_BASE_URL}/web/factory/work-items/${ITEM_ID}/comments`;
+const ATTENTION_URL = `${TEST_BASE_URL}/web/factory/projects/${PROJECT_ID}/attention`;
 const FEED_URL = `${TEST_BASE_URL}/web/factory/projects/${PROJECT_ID}/feed-events`;
 /** The provider's retry delay, plus room for the request to land. */
 const PAST_ONE_RETRY_MS = 5_000;
@@ -23,7 +24,11 @@ function inner({ children }: { children: React.ReactNode }) {
 }
 
 function watch() {
-  return { connected: useFeedEventsConnected(), comments: useWorkItemComments({ workItemId: ITEM_ID }) };
+  return {
+    connected: useFeedEventsConnected(),
+    comments: useWorkItemComments({ workItemId: ITEM_ID }),
+    attention: useFactoryAttentionHistory(PROJECT_ID, 'open', ''),
+  };
 }
 
 /** Connected, plus the catch-up refetch every fresh stream fires. */
@@ -39,6 +44,21 @@ function countComments(count: () => void) {
   });
 }
 
+function countAttention(count: () => void) {
+  return http.get(ATTENTION_URL, () => {
+    count();
+    return HttpResponse.json({
+      items: [],
+      openCount: 0,
+      approvalCount: 0,
+      badgeCount: 0,
+      unreadCount: 0,
+      activityUnreadCount: 0,
+      hasMore: false,
+    });
+  });
+}
+
 function setVisibility(state: 'visible' | 'hidden') {
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
   document.dispatchEvent(new Event('visibilitychange'));
@@ -47,51 +67,45 @@ function setVisibility(state: 'visible' | 'hidden') {
 afterEach(() => setVisibility('visible'));
 
 describe('FeedEventsProvider', () => {
-  it('refetches the named work item feed when a frame arrives', async () => {
+  it('refetches the named work item feed and the attention list when a frame arrives', async () => {
     const stream = pushableFeedStream(PROJECT_ID);
     let commentRequests = 0;
+    let attentionRequests = 0;
     server.use(
       stream.handler,
       countComments(() => (commentRequests += 1)),
+      countAttention(() => (attentionRequests += 1)),
     );
 
     const rendered = renderHookWithProviders(watch, { inner });
     const { result } = rendered;
     await settle(rendered);
-    const before = commentRequests;
+    const before = { comments: commentRequests, attention: attentionRequests };
 
     stream.push(ITEM_ID);
-    await waitFor(() => expect(commentRequests).toBe(before + 1));
+    await waitFor(() => expect(commentRequests).toBe(before.comments + 1));
+    await waitFor(() => expect(attentionRequests).toBe(before.attention + 1));
   });
 
-  it('refetches attention when a frame arrives', async () => {
+  it('moves attention alone on a frame that names no work item', async () => {
     const stream = pushableFeedStream(PROJECT_ID);
+    let commentRequests = 0;
     let attentionRequests = 0;
     server.use(
       stream.handler,
-      http.get(`${TEST_BASE_URL}/web/factory/projects/${PROJECT_ID}/attention`, () => {
-        attentionRequests += 1;
-        return HttpResponse.json({
-          items: [],
-          openCount: 0,
-          approvalCount: 0,
-          badgeCount: 0,
-          unreadCount: 0,
-          activityUnreadCount: 0,
-          hasMore: false,
-        });
-      }),
+      countComments(() => (commentRequests += 1)),
+      countAttention(() => (attentionRequests += 1)),
     );
 
-    const rendered = renderHookWithProviders(
-      () => ({ connected: useFeedEventsConnected(), attention: useFactoryAttentionHistory(PROJECT_ID, 'open', '') }),
-      { inner },
-    );
+    const rendered = renderHookWithProviders(watch, { inner });
+    const { result } = rendered;
     await settle(rendered);
-    const before = attentionRequests;
+    const before = { comments: commentRequests, attention: attentionRequests };
 
-    stream.push(ITEM_ID);
-    await waitFor(() => expect(attentionRequests).toBe(before + 1));
+    stream.push();
+    await waitFor(() => expect(attentionRequests).toBe(before.attention + 1));
+    // No work item is named, so no comment feed has a reason to move.
+    expect(commentRequests).toBe(before.comments);
   });
 
   it('leaves another work item alone', async () => {
@@ -138,18 +152,20 @@ describe('FeedEventsProvider', () => {
     await waitFor(() => expect(commentRequests).toBe(before + 1));
   });
 
-  it('catches up on comments written while the tab was hidden', async () => {
+  it('catches up on both lists when the tab comes back from hidden', async () => {
     const stream = pushableFeedStream(PROJECT_ID);
     let commentRequests = 0;
+    let attentionRequests = 0;
     server.use(
       stream.handler,
       countComments(() => (commentRequests += 1)),
+      countAttention(() => (attentionRequests += 1)),
     );
 
     const rendered = renderHookWithProviders(watch, { inner });
     const { result } = rendered;
     await settle(rendered);
-    const before = commentRequests;
+    const before = { comments: commentRequests, attention: attentionRequests };
 
     setVisibility('hidden');
     await waitFor(() => expect(result.current.connected).toBe(false));
@@ -157,7 +173,8 @@ describe('FeedEventsProvider', () => {
     setVisibility('visible');
     await waitFor(() => expect(result.current.connected).toBe(true));
     // A hidden tab holds no stream, so nothing announced what landed meanwhile.
-    await waitFor(() => expect(commentRequests).toBe(before + 1));
+    await waitFor(() => expect(commentRequests).toBe(before.comments + 1));
+    await waitFor(() => expect(attentionRequests).toBe(before.attention + 1));
   });
 
   it('stops reconnecting once the stream is refused', async () => {
