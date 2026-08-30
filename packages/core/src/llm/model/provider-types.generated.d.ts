@@ -3522,6 +3522,7 @@ export type ProviderModelsMap = {
     'glm-5',
     'glm-5.1',
     'glm-5.2',
+    'glm-5.3',
     'glm-5.3-flash',
     'gte-large-en-v1.5',
     'kimi-k2.5',
@@ -4078,6 +4079,7 @@ export type ProviderModelsMap = {
     'zai-org/GLM-5',
     'zai-org/GLM-5.1',
     'zai-org/GLM-5.2',
+    'zai-org/GLM-5.3',
     'zai-org/GLM-5.3-Flash',
   ];
   readonly ofox: readonly [
@@ -6232,6 +6234,7 @@ export type ProviderModelsMap = {
     'gemma-4-31b-it',
     'glm-5.1',
     'glm-5.2',
+    'glm-5.3',
     'glm-5.3-flash',
     'greg-1-mini',
     'greg-2-super',
