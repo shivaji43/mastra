@@ -841,6 +841,11 @@ const sidebars = {
         },
         {
           type: 'doc',
+          id: 'providers/sensenova',
+          label: 'SenseNova (China)',
+        },
+        {
+          type: 'doc',
           id: 'providers/siliconflow',
           label: 'SiliconFlow',
         },

@@ -132,6 +132,7 @@ export type ProviderModelsMap = {
     'glm-5.2-short-fast',
     'glm-5.2-short-fast-flex',
     'glm-5.2-short-flex',
+    'glm-5.3',
     'kimi-k2.7-code',
     'kimi-k2.7-code-fast',
     'kimi-k2.7-code-flex',
@@ -2082,6 +2083,7 @@ export type ProviderModelsMap = {
     'deepseek-v4-pro',
     'glm-5.2',
     'glm-5.2-fast',
+    'glm-5.3-flash',
     'mimo-v2.5-pro',
     'mimo-v2.5-pro-ultraspeed',
     'qwen3.8-max',
@@ -2301,6 +2303,7 @@ export type ProviderModelsMap = {
     'claude-sonnet-4-6',
     'claude-sonnet-5',
   ];
+  readonly sensenova: readonly ['deepseek-v4-flash', 'glm-5.2', 'sensenova-6.8-flash-lite'];
   readonly zai: readonly [
     'glm-4.5',
     'glm-4.5-air',
@@ -3684,6 +3687,8 @@ export type ProviderModelsMap = {
     'openai/gpt-oss-120b',
     'zai-org/GLM-4.7',
     'zai-org/GLM-5.2',
+    'zai-org/GLM-5.3',
+    'zai-org/GLM-5.3-Flash',
   ];
   readonly xiaomi: readonly [
     'mimo-v2-flash',
@@ -4668,7 +4673,6 @@ export type ProviderModelsMap = {
     'gpt-5-mini@eu',
     'gpt-5-nano@eu',
     'gpt-5.1@eu',
-    'gpt-5.3-chat',
     'gpt-5.3-codex',
     'gpt-5.4',
     'gpt-5.4-mini',

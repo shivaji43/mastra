@@ -161,6 +161,7 @@
         "glm-5.2-short-fast",
         "glm-5.2-short-fast-flex",
         "glm-5.2-short-flex",
+        "glm-5.3",
         "kimi-k2.7-code",
         "kimi-k2.7-code-fast",
         "kimi-k2.7-code-flex",
@@ -2485,6 +2486,7 @@
         "deepseek-v4-pro",
         "glm-5.2",
         "glm-5.2-fast",
+        "glm-5.3-flash",
         "mimo-v2.5-pro",
         "mimo-v2.5-pro-ultraspeed",
         "qwen3.8-max"
@@ -2778,6 +2780,15 @@
       "docUrl": "https://docs.anthropic.com/en/docs/about-claude/models",
       "gateway": "models.dev",
       "npm": "@ai-sdk/anthropic"
+    },
+    "sensenova": {
+      "url": "https://token.sensenova.cn/v1",
+      "apiKeyEnvVar": "SENSENOVA_API_KEY",
+      "apiKeyHeader": "Authorization",
+      "name": "SenseNova (China)",
+      "models": ["deepseek-v4-flash", "glm-5.2", "sensenova-6.8-flash-lite"],
+      "docUrl": "https://platform.sensenova.cn/docs",
+      "gateway": "models.dev"
     },
     "zai": {
       "url": "https://api.z.ai/api/paas/v4",
@@ -4668,7 +4679,9 @@
         "moonshotai/Kimi-K3",
         "openai/gpt-oss-120b",
         "zai-org/GLM-4.7",
-        "zai-org/GLM-5.2"
+        "zai-org/GLM-5.2",
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-Flash"
       ],
       "docUrl": "https://api.berget.ai",
       "gateway": "models.dev"
@@ -6553,7 +6566,6 @@
         "gpt-5-mini@eu",
         "gpt-5-nano@eu",
         "gpt-5.1@eu",
-        "gpt-5.3-chat",
         "gpt-5.3-codex",
         "gpt-5.4",
         "gpt-5.4-mini",
@@ -9772,6 +9784,7 @@
       "glm-5.2-short-fast",
       "glm-5.2-short-fast-flex",
       "glm-5.2-short-flex",
+      "glm-5.3",
       "kimi-k2.7-code",
       "kimi-k2.7-code-fast",
       "kimi-k2.7-code-flex",
@@ -11722,6 +11735,7 @@
       "deepseek-v4-pro",
       "glm-5.2",
       "glm-5.2-fast",
+      "glm-5.3-flash",
       "mimo-v2.5-pro",
       "mimo-v2.5-pro-ultraspeed",
       "qwen3.8-max"
@@ -11941,6 +11955,7 @@
       "claude-sonnet-4-6",
       "claude-sonnet-5"
     ],
+    "sensenova": ["deepseek-v4-flash", "glm-5.2", "sensenova-6.8-flash-lite"],
     "zai": [
       "glm-4.5",
       "glm-4.5-air",
@@ -13323,7 +13338,9 @@
       "moonshotai/Kimi-K3",
       "openai/gpt-oss-120b",
       "zai-org/GLM-4.7",
-      "zai-org/GLM-5.2"
+      "zai-org/GLM-5.2",
+      "zai-org/GLM-5.3",
+      "zai-org/GLM-5.3-Flash"
     ],
     "xiaomi": [
       "mimo-v2-flash",
@@ -14301,7 +14318,6 @@
       "gpt-5-mini@eu",
       "gpt-5-nano@eu",
       "gpt-5.1@eu",
-      "gpt-5.3-chat",
       "gpt-5.3-codex",
       "gpt-5.4",
       "gpt-5.4-mini",
