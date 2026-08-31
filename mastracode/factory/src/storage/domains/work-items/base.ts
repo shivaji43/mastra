@@ -410,6 +410,8 @@ export interface PrepareFactoryRunStartInput {
   kickoffMessage: string | null;
   /** Arm the item's autonomy in the same transaction that prepares the run. */
   armAutonomy?: boolean;
+  /** Grant the item's plans auto-approval in the same transaction — the person chose a hands-off run. */
+  preapprovePlans?: boolean;
 }
 
 export interface PrepareFactoryRunStartResult {
@@ -448,6 +450,11 @@ export interface WorkItemRow {
    * work they already asked for, so runs on an armed item skip the gate.
    */
   autonomyArmedAt: Date | null;
+  /**
+   * When a person chose to run this item hands-off: the dispatcher answers its
+   * parked plans even while the project's Auto-approve plans switch is off.
+   */
+  plansPreapprovedAt: Date | null;
   /** Denormalized feed counters, maintained by the comments domain via recount. */
   commentCount: number;
   /** Bumps on every feed mutation (create/edit/delete) — the clients' change hint. */
@@ -502,6 +509,7 @@ export const WORK_ITEMS_SCHEMA: CollectionSchema = {
     metadata: { type: 'json', nullable: true },
     triage_type: { type: 'text', nullable: true },
     autonomy_armed_at: { type: 'timestamp', nullable: true },
+    plans_preapproved_at: { type: 'timestamp', nullable: true },
     comment_count: { type: 'integer', default: 0 },
     feed_activity_at: { type: 'timestamp', nullable: true },
     revision: { type: 'integer', default: 1 },
@@ -547,6 +555,7 @@ interface WorkItemDbRow extends Record<string, unknown> {
   metadata: Record<string, unknown> | null;
   triage_type: FactoryTriageType | null;
   autonomy_armed_at: Date | null;
+  plans_preapproved_at: Date | null;
   comment_count: number;
   feed_activity_at: Date | null;
   revision: number;
@@ -580,6 +589,7 @@ function toWorkItem(row: WorkItemDbRow): WorkItemRow {
     metadata: row.metadata,
     triageType: row.triage_type ?? null,
     autonomyArmedAt: row.autonomy_armed_at ?? null,
+    plansPreapprovedAt: row.plans_preapproved_at ?? null,
     commentCount: row.comment_count ?? 0,
     feedActivityAt: row.feed_activity_at ?? null,
     revision: row.revision,
@@ -2552,6 +2562,12 @@ export class WorkItemsStorage extends FactoryStorageDomain {
             current.autonomy_armed_at ? null : { autonomy_armed_at: now },
           );
           if (armedRow) item = toRow(armedRow);
+        }
+        if (input.preapprovePlans && !item.plansPreapprovedAt) {
+          const grantedRow = await ops.updateAtomic<WorkItemDbRow>('work_items', { id: item.id }, current =>
+            current.plans_preapproved_at ? null : { plans_preapproved_at: now },
+          );
+          if (grantedRow) item = toRow(grantedRow);
         }
         await ops.updateMany(
           'factory_run_bindings',

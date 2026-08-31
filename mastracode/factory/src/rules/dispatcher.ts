@@ -706,7 +706,7 @@ export class FactoryDecisionDispatcher {
         // the break is invisible on the card.
         const run = watchRun(session, {
           timeoutMs: this.#skillCompletionObservationTimeoutMs,
-          approvePlans: await this.#plansAreAutoApproved(record),
+          approvePlans: await this.#plansAreAutoApproved(record, item),
           onParkedRun: 'escalate',
           label: 'Factory skill run',
         });
@@ -970,13 +970,11 @@ export class FactoryDecisionDispatcher {
   }
 
   /** Unset means off: a plan nobody asked us to answer is a plan someone should see. */
-  async #plansAreAutoApproved({
-    orgId,
-    factoryProjectId,
-  }: {
-    orgId: string;
-    factoryProjectId: string;
-  }): Promise<boolean> {
+  async #plansAreAutoApproved(
+    { orgId, factoryProjectId }: { orgId: string; factoryProjectId: string },
+    item?: { plansPreapprovedAt: Date | null } | null,
+  ): Promise<boolean> {
+    if (item?.plansPreapprovedAt) return true;
     return this.#autoApprovePlans ? await this.#autoApprovePlans({ orgId, factoryProjectId }) : false;
   }
 
@@ -1052,7 +1050,7 @@ export class FactoryDecisionDispatcher {
           // alone strands the card with a success ledger entry.
           const run = watchRun(session, {
             timeoutMs: this.#skillCompletionObservationTimeoutMs,
-            approvePlans: await this.#plansAreAutoApproved(record),
+            approvePlans: await this.#plansAreAutoApproved(record, item),
             onParkedRun: 'await',
             label: 'Factory kickoff run',
           });

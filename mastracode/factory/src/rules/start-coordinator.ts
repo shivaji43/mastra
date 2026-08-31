@@ -31,6 +31,8 @@ export interface FactoryStartRequest {
   requestContext?: RequestContext;
   /** Arm the item's autonomy in the same transaction that prepares the run. */
   armAutonomy?: boolean;
+  /** The person chose a hands-off run: the item's parked plans get approved for them. */
+  preapprovePlans?: boolean;
 }
 
 export class FactoryStartTransitionError extends Error {
@@ -227,6 +229,7 @@ export class FactoryStartCoordinator {
       kickoffKey: request.kickoffKey,
       kickoffMessage,
       armAutonomy: request.armAutonomy === true,
+      preapprovePlans: request.preapprovePlans === true,
     });
     await session.thread.setSetting({ key: 'factoryWorkItemId', value: prepared.item.id });
 

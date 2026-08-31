@@ -227,8 +227,9 @@ async function queueDecision(
 }
 
 /** Give a card the live `work` session an `invokeSkill` effect kicks off into. */
-async function bindWorkRun(storage: WorkItemsStorage, workItemId: string) {
+async function bindWorkRun(storage: WorkItemsStorage, workItemId: string, options?: { preapprovePlans?: boolean }) {
   const prepared = await storage.prepareRunStart({
+    preapprovePlans: options?.preapprovePlans,
     orgId: 'org-1',
     userId: 'user-1',
     factoryProjectId: PROJECT_ID,
@@ -252,9 +253,10 @@ async function bindWorkRun(storage: WorkItemsStorage, workItemId: string) {
 }
 
 /** A card whose run someone asked for: a pending start still waiting to be sent. */
-async function queueRunKickoff(storage: WorkItemsStorage) {
+async function queueRunKickoff(storage: WorkItemsStorage, options?: { preapprovePlans?: boolean }) {
   const item = await createItem(storage);
   await storage.prepareRunStart({
+    preapprovePlans: options?.preapprovePlans,
     orgId: 'org-1',
     userId: 'user-1',
     factoryProjectId: PROJECT_ID,
@@ -2330,6 +2332,57 @@ describe('FactoryDecisionDispatcher', () => {
       toolCallId: 'call-plan',
     });
     expect((await storage.listPendingStarts('org-1', PROJECT_ID))[0]?.status).toBe('sent');
+  });
+
+  it("approves a hands-off item's plan while the project switch stays off", async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { item, transitionService } = await queueRunKickoff(storage, { preapprovePlans: true });
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => false,
+      autoApprovePlans: async () => false,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect((await storage.get({ orgId: 'org-1', id: item.id }))?.plansPreapprovedAt).toBeInstanceOf(Date);
+    expect(session.respondToToolSuspension).toHaveBeenCalledWith({
+      resumeData: { action: 'approved' },
+      toolCallId: 'call-plan',
+    });
+    expect((await storage.listPendingStarts('org-1', PROJECT_ID))[0]?.status).toBe('sent');
+  });
+
+  it("approves a hands-off item's plan on rule-started follow-up runs too", async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { item, transitionService } = await queueDecision(storage, {
+      type: 'invokeSkill',
+      role: 'work',
+      skillName: 'understand-issue',
+      idempotencyKey: 'skill-plan-hands-off',
+    });
+    await bindWorkRun(storage, item.id, { preapprovePlans: true });
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => true,
+      autoApprovePlans: async () => false,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect(session.respondToToolSuspension).toHaveBeenCalledWith({
+      resumeData: { action: 'approved' },
+      toolCallId: 'call-plan',
+    });
+    expect((await storage.listDeferredDecisions('org-1', PROJECT_ID))[0]?.status).toBe('succeeded');
   });
 
   it('caps the plans it approves, so a run that keeps re-planning reaches a person', async () => {
