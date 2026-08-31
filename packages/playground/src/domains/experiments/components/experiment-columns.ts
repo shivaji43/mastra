@@ -9,10 +9,26 @@ export const experimentColumnLabels = {
   target: 'Target',
   status: 'Status',
   items: 'Items',
-  succeeded: 'Succeeded',
-  failed: 'Failed',
+  succeeded: 'Processed',
+  failed: 'Errored',
   review: 'Review',
   date: 'Date',
+};
+
+// A completed run is neutral, not a success: it says the run finished, not that the scores are good.
+export const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
+  completed: 'neutral',
+  running: 'warning',
+  failed: 'error',
+  pending: 'neutral',
+};
+
+// "Completed" alone reads as a verdict on the scores; "Run completed" says it's the run that finished.
+export const STATUS_LABEL: Record<string, string> = {
+  completed: 'Run completed',
+  running: 'Run in progress',
+  failed: 'Run failed',
+  pending: 'Run queued',
 };
 
 export function formatExperimentDate(dateStr: string | Date | undefined | null): string {
