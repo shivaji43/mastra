@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AutomationFailedAttentionProvider } from '../routes/attention-providers.js';
 import { FactoryFeedReader } from '../storage/domains/comments/feed-context.js';
 import type { WorkItemsStorage } from '../storage/domains/work-items/base.js';
 import { createFactoryStorageForTests } from '../storage/test-utils.js';
@@ -48,6 +49,14 @@ function createSession(
      * wake response.
      */
     notificationResponses?: Array<{ action: 'deliver'; endRun?: boolean } | { action: 'wake' }>;
+    /**
+     * The kicked-off run suspends on `submit_plan`. Like core, the suspension
+     * ends the run (`agent_end: 'suspended'`); answering it resumes a run that
+     * then finishes.
+     */
+    suspendsOnPlan?: boolean;
+    /** The resumed run writes another plan, so an uncapped gate would never end. */
+    replansAfterApproval?: boolean;
   },
 ) {
   let threadId = 'thread-1';
@@ -57,9 +66,19 @@ function createSession(
       listener({ type: 'agent_end', reason });
     }
   };
+  const emitPlanSuspension = () => {
+    for (const listener of agentEndListeners) {
+      listener({ type: 'tool_suspended', toolName: 'submit_plan', toolCallId: 'call-plan' });
+    }
+    emitAgentEnd('suspended');
+  };
   // A consumed wake stream means the woken run ran to its end, so the real
   // session emits agent_end by then; the dispatcher now waits to observe it.
   const consumeStream = vi.fn(async () => {
+    if (options?.suspendsOnPlan) {
+      emitPlanSuspension();
+      return;
+    }
     emitAgentEnd(options?.agentEndReason ?? 'complete');
   });
   const notificationAccepted = accepted ?? Promise.resolve({ action: 'wake', output: { consumeStream } });
@@ -114,6 +133,7 @@ function createSession(
       },
     }),
     state: { set: vi.fn(async () => {}) },
+    permissions: { setForTool: vi.fn(async () => {}) },
     sendMessage: vi.fn(async () => {}),
     sendSignal: vi.fn((input: { id: string }, _options: { requestContext: { get(key: string): unknown } }) => {
       signalSends += 1;
@@ -121,7 +141,9 @@ function createSession(
       // a redelivery into a session the dispatcher waited for.
       const redelivered = signalSends > 1 && options?.acceptRedeliveredSignal === true;
       if (!options?.dropDeliveredSignal || redelivered) deliveredSignals.add(input.id);
-      if (options?.emitAgentEndDuringSignal || redelivered) {
+      if (options?.suspendsOnPlan) {
+        queueMicrotask(emitPlanSuspension);
+      } else if (options?.emitAgentEndDuringSignal || redelivered) {
         emitAgentEnd(redelivered ? 'complete' : undefined);
       } else if (options?.endRunAfterDroppedSignal) {
         // The busy run finishes without ever answering the queued prompt, which
@@ -138,6 +160,16 @@ function createSession(
     subscribe: vi.fn((listener: (event: { type: string; reason?: string }) => void) => {
       agentEndListeners.add(listener);
       return () => agentEndListeners.delete(listener);
+    }),
+    respondToToolSuspension: vi.fn(async () => {
+      // Answering a suspension resumes the run over the wire, so it settles well
+      // after the suspension's own `agent_end` has already been dispatched.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (options?.replansAfterApproval) {
+        emitPlanSuspension();
+        return;
+      }
+      emitAgentEnd('complete');
     }),
     sendNotificationSignal,
   };
@@ -206,6 +238,38 @@ async function bindWorkRun(storage: WorkItemsStorage, workItemId: string) {
     kickoffMessage: null,
   });
   await storage.markPendingStart(prepared.binding.id, 'sent');
+}
+
+/** A card whose run someone asked for: a pending start still waiting to be sent. */
+async function queueRunKickoff(storage: WorkItemsStorage) {
+  const item = await createItem(storage);
+  await storage.prepareRunStart({
+    orgId: 'org-1',
+    userId: 'user-1',
+    factoryProjectId: PROJECT_ID,
+    workItem: {
+      id: item.id,
+      input: {
+        externalSource: { integrationId: 'github', type: 'issue', externalId: 'github-issue:1' },
+        title: 'Fix issue',
+        stages: ['execute'],
+        sessions: {},
+        metadata: {},
+      },
+    },
+    role: 'work',
+    session: { sessionId: 'session-1', branch: 'factory/issue-1', threadId: 'thread-1' },
+    resourceId: PROJECT_ID,
+    kickoffKey: `kickoff-${item.id}`,
+    kickoffMessage: 'Start work on this issue.',
+  });
+  return {
+    item,
+    transitionService: new FactoryTransitionService({
+      rules: defaultFactoryRules({ version: 'rules-v1' }),
+      storage,
+    }),
+  };
 }
 
 describe('FactoryDecisionDispatcher', () => {
@@ -2076,6 +2140,140 @@ describe('FactoryDecisionDispatcher', () => {
 
     expect((await storage.listDeferredDecisions('org-1', PROJECT_ID))[0]?.status).toBe('proposed');
     expect(session.sendSignal).not.toHaveBeenCalled();
+  });
+
+  it("approves a plan on the project's behalf when plan review is off", async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { item, transitionService } = await queueDecision(storage, {
+      type: 'invokeSkill',
+      role: 'work',
+      skillName: 'understand-issue',
+      idempotencyKey: 'skill-plan-auto-approved',
+    });
+    await bindWorkRun(storage, item.id);
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => true,
+      autoApprovePlans: async () => true,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect(session.respondToToolSuspension).toHaveBeenCalledWith({
+      resumeData: { action: 'approved' },
+      toolCallId: 'call-plan',
+    });
+    expect((await storage.listDeferredDecisions('org-1', PROJECT_ID))[0]?.status).toBe('succeeded');
+  });
+
+  it('fails the run loudly when plan review is on and nobody answers the plan', async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { item, transitionService } = await queueDecision(storage, {
+      type: 'invokeSkill',
+      role: 'work',
+      skillName: 'understand-issue',
+      idempotencyKey: 'skill-plan-parked',
+    });
+    await bindWorkRun(storage, item.id);
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => true,
+      autoApprovePlans: async () => false,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    // The pause is a designed checkpoint, not a crash — but it must be visible:
+    // the decision lands in Needs attention with its reason attached.
+    expect(session.respondToToolSuspension).not.toHaveBeenCalled();
+    const [record] = await storage.listDeferredDecisions('org-1', PROJECT_ID);
+    expect(record).toMatchObject({ status: 'failed', failureCode: 'plan_awaiting_approval' });
+
+    // Not just the row: the surface a person actually reads.
+    const provider = new AutomationFailedAttentionProvider({ workItems: storage });
+    const scope = { orgId: 'org-1', factoryProjectId: PROJECT_ID };
+    expect(await provider.counts(scope)).toMatchObject({ open: 1, unread: 1 });
+    const page = await provider.page(scope, { view: 'open', search: undefined, before: undefined, limit: 10 });
+    expect(page.entries[0]?.item).toMatchObject({
+      kind: 'automation-failed',
+      failureCode: 'plan_awaiting_approval',
+      workItemId: record?.workItemId,
+    });
+  });
+
+  it("leaves a person-started run's plan to the person reading it", async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { transitionService } = await queueRunKickoff(storage);
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => false,
+      autoApprovePlans: async () => false,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect(session.respondToToolSuspension).not.toHaveBeenCalled();
+    expect((await storage.listPendingStarts('org-1', PROJECT_ID))[0]).toMatchObject({ status: 'sent' });
+  });
+
+  it("approves a person-started run's plan too when plan review is off", async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { transitionService } = await queueRunKickoff(storage);
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => false,
+      autoApprovePlans: async () => true,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect(session.respondToToolSuspension).toHaveBeenCalledWith({
+      resumeData: { action: 'approved' },
+      toolCallId: 'call-plan',
+    });
+    expect((await storage.listPendingStarts('org-1', PROJECT_ID))[0]?.status).toBe('sent');
+  });
+
+  it('caps the plans it approves, so a run that keeps re-planning reaches a person', async () => {
+    const storage = (await createFactoryStorageForTests()).workItems;
+    const { item, transitionService } = await queueDecision(storage, {
+      type: 'invokeSkill',
+      role: 'work',
+      skillName: 'understand-issue',
+      idempotencyKey: 'skill-plan-loop',
+    });
+    await bindWorkRun(storage, item.id);
+    const { controller, session } = createSession(undefined, { suspendsOnPlan: true, replansAfterApproval: true });
+    const dispatcher = new FactoryDecisionDispatcher({
+      controller: controller as never,
+      transitionService,
+      storage,
+      ownerId: 'worker-1',
+      isAutoRunEnabled: async () => true,
+      autoApprovePlans: async () => true,
+    });
+
+    await dispatcher.runOnce(new Date('2030-01-01T00:00:00Z'));
+
+    expect(session.respondToToolSuspension).toHaveBeenCalledTimes(3);
+    const [record] = await storage.listDeferredDecisions('org-1', PROJECT_ID);
+    expect(record).toMatchObject({ status: 'failed', failureCode: 'plan_awaiting_approval' });
   });
 
   it('arms an item once, so the first commitment is the one that counts', async () => {

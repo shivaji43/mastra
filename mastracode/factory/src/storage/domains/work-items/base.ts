@@ -157,6 +157,7 @@ const FACTORY_DISPATCH_FAILURE_CODES = [
   'source_repository_missing',
   'unsupported_provider_item',
   'notification_delivery_failed',
+  'plan_awaiting_approval',
   'repository_git_missing',
   'repository_egress_blocked',
   'repository_clone_failed',
@@ -341,6 +342,7 @@ export interface FactoryPendingStartRecord {
   leaseOwner: string | null;
   leaseExpiresAt: Date | null;
   lastError: string | null;
+  failureCode: FactoryDispatchFailureCode | null;
   completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -904,6 +906,7 @@ const FACTORY_GOVERNANCE_SCHEMAS: CollectionSchema[] = [
       lease_owner: { type: 'text', nullable: true },
       lease_expires_at: { type: 'timestamp', nullable: true },
       last_error: { type: 'text', nullable: true },
+      failure_code: { type: 'text', nullable: true },
       completed_at: { type: 'timestamp', nullable: true },
       created_at: { type: 'timestamp' },
       updated_at: { type: 'timestamp' },
@@ -1025,6 +1028,7 @@ function toPendingStart(row: GovernanceDbRow): FactoryPendingStartRecord {
     leaseOwner: (row.lease_owner as string | null) ?? null,
     leaseExpiresAt: (row.lease_expires_at as Date | null) ?? null,
     lastError: (row.last_error as string | null) ?? null,
+    failureCode: (row.failure_code as FactoryDispatchFailureCode | null) ?? null,
     completedAt: (row.completed_at as Date | null) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at as Date,
@@ -1203,7 +1207,7 @@ export class WorkItemsStorage extends FactoryStorageDomain {
           lease_owner: null,
           lease_expires_at: null,
           last_error: input.lastError,
-          ...(table === 'factory_deferred_decisions' ? { failure_code: input.failureCode } : {}),
+          failure_code: input.failureCode,
           completed_at: input.terminal ? input.now : null,
           ...(table === 'factory_deferred_decisions' && input.terminal
             ? { failure_occurrence: Number(current.failure_occurrence ?? 0) + 1 }
@@ -2596,6 +2600,7 @@ export class WorkItemsStorage extends FactoryStorageDomain {
           lease_owner: null,
           lease_expires_at: null,
           last_error: null,
+          failure_code: null,
           completed_at: null,
           created_at: now,
           updated_at: now,

@@ -202,6 +202,10 @@ export class FactoryStartCoordinator {
       defaultModelId: request.defaultModelId,
       memorySettings: this.#memorySettings,
     });
+    // The tool is `requireApproval`, and that prompt parks the run whether or not
+    // someone pressed Start — a person is reading the plan, not an approval queue.
+    // Starting the run was already the say-so; the rules engine still governs.
+    await session.permissions.setForTool({ toolName: 'factory_transition_work_item', policy: 'allow' });
     const threadId = await configureThread(session, request);
     let kickoffMessage = await resolveKickoffMessage(session, request.invocation);
     // A null kickoff is a deliberate no-send branch and must stay null.

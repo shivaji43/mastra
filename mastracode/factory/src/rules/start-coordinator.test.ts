@@ -33,6 +33,7 @@ function makeController(sendMessage = vi.fn(async () => {})) {
     },
     getWorkspace: vi.fn(() => ({ skills: undefined })),
     state: { get: vi.fn(() => ({})), set: vi.fn(async () => {}) },
+    permissions: { setForTool: vi.fn(async () => {}) },
     model: { switch: vi.fn(async () => {}) },
     om: {
       observer: { modelId: vi.fn(() => undefined), switchModel: vi.fn(async () => {}) },
@@ -238,6 +239,11 @@ describe('FactoryStartCoordinator', () => {
       replayed: false,
     });
     expect((await storage.listPendingStarts('org-1', PROJECT_ID))[0]?.status).toBe('pending');
+    const session = await vi.mocked(controller.createSession).mock.results[0]?.value;
+    expect(session.permissions.setForTool).toHaveBeenCalledWith({
+      toolName: 'factory_transition_work_item',
+      policy: 'allow',
+    });
     const requestContext = vi.mocked(controller.createSession).mock.calls[0]?.[0].requestContext;
     expect(requestContext?.get('user')).toEqual({
       workosId: 'user-1',
