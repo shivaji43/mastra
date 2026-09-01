@@ -153,9 +153,8 @@ export type ProviderModelsMap = {
     'umans-kimi-k3',
     'umans-qwen3.6-35b-a3b',
   ];
-  readonly iteracompute: readonly ['iteracompute/qwen3.8-27b'];
+  readonly iteracompute: readonly ['iteracompute/ornith-1.5-35b-a3b', 'iteracompute/qwen3.8-27b'];
   readonly vancine: readonly [
-    'LongCat-2.0',
     'MiniMax-M3',
     'deepseek-v4-flash',
     'deepseek-v4-flash-vision-exp',
@@ -164,7 +163,6 @@ export type ProviderModelsMap = {
     'glm-5.3-flash',
     'hy4-preview',
     'kimi-k3',
-    'mimo-v2.5-pro',
     'qwen3.8-flash',
     'qwen3.8-max',
   ];
@@ -5645,6 +5643,7 @@ export type ProviderModelsMap = {
     'voyage/voyage-law-2',
     'xiaomi/mimo-v2.5',
     'xiaomi/mimo-v2.5-pro',
+    'xiaomi/mimo-v2.5-pro-ultraspeed',
     'zai/glm-4.5',
     'zai/glm-4.5-air',
     'zai/glm-4.5v',
@@ -5733,6 +5732,7 @@ export type ProviderModelsMap = {
     'fireworks_ai/gpt-oss-120b',
     'flexai/Muse-Glimmer-30B',
     'flexai/Nemotron-3-Super-120B-A12B',
+    'flexai/Step-3.7-Flash',
     'flexai/deepseek-v4-flash-0731',
     'flexai/gpt-oss-120b',
     'flexai/gpt-oss-20b',
