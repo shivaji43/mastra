@@ -217,7 +217,8 @@
     "~moonshotai/kimi-latest",
     "~openai/gpt-latest",
     "~openai/gpt-mini-latest",
-    "~x-ai/grok-latest"
+    "~x-ai/grok-latest",
+    "~z-ai/glm-flash-latest"
   ],
   "temperature": [
     "aion-labs/aion-2.0",
@@ -533,6 +534,7 @@
     "~google/gemini-pro-latest",
     "~moonshotai/kimi-latest",
     "~x-ai/grok-latest",
+    "~z-ai/glm-flash-latest",
     "~z-ai/glm-latest"
   ],
   "structuredOutput": [
@@ -804,6 +806,7 @@
     "~openai/gpt-latest",
     "~openai/gpt-mini-latest",
     "~x-ai/grok-latest",
+    "~z-ai/glm-flash-latest",
     "~z-ai/glm-latest"
   ]
 }

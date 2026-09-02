@@ -2394,6 +2394,7 @@
         "~openai/gpt-latest",
         "~openai/gpt-mini-latest",
         "~x-ai/grok-latest",
+        "~z-ai/glm-flash-latest",
         "~z-ai/glm-latest"
       ],
       "docUrl": "https://openrouter.ai/models",
@@ -2578,6 +2579,7 @@
       "name": "CrossModel",
       "models": [
         "anthropic/claude-fable-5",
+        "anthropic/claude-fable-5-1",
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-opus-4-7",
         "anthropic/claude-opus-4-8",
@@ -3495,6 +3497,7 @@
         "cerebras/llama-3.3-70b-instruct",
         "cerebras/qwen3-235b-a22b-instruct-2507",
         "consensusprotocol/deepseek-v4-flash",
+        "consensusprotocol/gpt-oss-20b",
         "deepinfra/deepseek-v3.2",
         "deepinfra/deepseek-v4-flash",
         "deepinfra/deepseek-v4-pro",
@@ -6199,6 +6202,7 @@
         "big-pickle",
         "claude-3-5-haiku",
         "claude-fable-5",
+        "claude-fable-5-1",
         "claude-haiku-4-5",
         "claude-opus-4-1",
         "claude-opus-4-5",
@@ -6323,6 +6327,9 @@
         },
         "grok-4.6": {
           "npm": "@ai-sdk/openai"
+        },
+        "claude-fable-5-1": {
+          "npm": "@ai-sdk/anthropic"
         },
         "gpt-5.4-pro": {
           "npm": "@ai-sdk/openai"
@@ -9040,6 +9047,7 @@
         "~openai/gpt-latest",
         "~openai/gpt-mini-latest",
         "~x-ai/grok-latest",
+        "~z-ai/glm-flash-latest",
         "~z-ai/glm-latest"
       ],
       "docUrl": "https://kilo.ai",
@@ -9650,6 +9658,7 @@
         "openrouter/~deepseek/deepseek-v4-flash-latest",
         "openrouter/~moonshotai/kimi-latest",
         "openrouter/~x-ai/grok-latest",
+        "openrouter/~z-ai/glm-flash-latest",
         "openrouter/~z-ai/glm-latest"
       ],
       "docUrl": "https://docs.netlify.com/build/ai-gateway/overview/"
@@ -11696,6 +11705,7 @@
       "~openai/gpt-latest",
       "~openai/gpt-mini-latest",
       "~x-ai/grok-latest",
+      "~z-ai/glm-flash-latest",
       "~z-ai/glm-latest"
     ],
     "poolside": ["poolside/laguna-m.1", "poolside/laguna-s-2.1", "poolside/laguna-xs-2.1"],
@@ -11782,6 +11792,7 @@
     ],
     "crossmodel": [
       "anthropic/claude-fable-5",
+      "anthropic/claude-fable-5-1",
       "anthropic/claude-haiku-4-5",
       "anthropic/claude-opus-4-7",
       "anthropic/claude-opus-4-8",
@@ -12461,6 +12472,7 @@
       "cerebras/llama-3.3-70b-instruct",
       "cerebras/qwen3-235b-a22b-instruct-2507",
       "consensusprotocol/deepseek-v4-flash",
+      "consensusprotocol/gpt-oss-20b",
       "deepinfra/deepseek-v3.2",
       "deepinfra/deepseek-v4-flash",
       "deepinfra/deepseek-v4-pro",
@@ -14145,6 +14157,7 @@
       "big-pickle",
       "claude-3-5-haiku",
       "claude-fable-5",
+      "claude-fable-5-1",
       "claude-haiku-4-5",
       "claude-opus-4-1",
       "claude-opus-4-5",
@@ -16355,6 +16368,7 @@
       "~openai/gpt-latest",
       "~openai/gpt-mini-latest",
       "~x-ai/grok-latest",
+      "~z-ai/glm-flash-latest",
       "~z-ai/glm-latest"
     ],
     "pioneer": [
@@ -16890,6 +16904,7 @@
       "openrouter/~deepseek/deepseek-v4-flash-latest",
       "openrouter/~moonshotai/kimi-latest",
       "openrouter/~x-ai/grok-latest",
+      "openrouter/~z-ai/glm-flash-latest",
       "openrouter/~z-ai/glm-latest"
     ]
   },

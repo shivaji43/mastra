@@ -2048,6 +2048,7 @@ export type ProviderModelsMap = {
     '~openai/gpt-latest',
     '~openai/gpt-mini-latest',
     '~x-ai/grok-latest',
+    '~z-ai/glm-flash-latest',
     '~z-ai/glm-latest',
   ];
   readonly poolside: readonly ['poolside/laguna-m.1', 'poolside/laguna-s-2.1', 'poolside/laguna-xs-2.1'];
@@ -2134,6 +2135,7 @@ export type ProviderModelsMap = {
   ];
   readonly crossmodel: readonly [
     'anthropic/claude-fable-5',
+    'anthropic/claude-fable-5-1',
     'anthropic/claude-haiku-4-5',
     'anthropic/claude-opus-4-7',
     'anthropic/claude-opus-4-8',
@@ -2813,6 +2815,7 @@ export type ProviderModelsMap = {
     'cerebras/llama-3.3-70b-instruct',
     'cerebras/qwen3-235b-a22b-instruct-2507',
     'consensusprotocol/deepseek-v4-flash',
+    'consensusprotocol/gpt-oss-20b',
     'deepinfra/deepseek-v3.2',
     'deepinfra/deepseek-v4-flash',
     'deepinfra/deepseek-v4-pro',
@@ -4504,6 +4507,7 @@ export type ProviderModelsMap = {
     'big-pickle',
     'claude-3-5-haiku',
     'claude-fable-5',
+    'claude-fable-5-1',
     'claude-haiku-4-5',
     'claude-opus-4-1',
     'claude-opus-4-5',
@@ -6718,6 +6722,7 @@ export type ProviderModelsMap = {
     '~openai/gpt-latest',
     '~openai/gpt-mini-latest',
     '~x-ai/grok-latest',
+    '~z-ai/glm-flash-latest',
     '~z-ai/glm-latest',
   ];
   readonly pioneer: readonly [
@@ -7253,6 +7258,7 @@ export type ProviderModelsMap = {
     'openrouter/~deepseek/deepseek-v4-flash-latest',
     'openrouter/~moonshotai/kimi-latest',
     'openrouter/~x-ai/grok-latest',
+    'openrouter/~z-ai/glm-flash-latest',
     'openrouter/~z-ai/glm-latest',
   ];
 };
