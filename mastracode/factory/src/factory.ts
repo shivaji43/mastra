@@ -40,6 +40,7 @@ import {
 } from './auth.js';
 import { touchFeed } from './feed-events.js';
 import type { FactoryIntegration, IntegrationPostToolContext, IntegrationTools } from './integrations/base.js';
+import { reconcileGithubAcceptanceLabels } from './integrations/github/acceptance-labels.js';
 import type { GithubIntegration } from './integrations/github/integration.js';
 import {
   recordFactoryPullRequestProvenance,
@@ -97,6 +98,7 @@ import { FactoryProjectsStorage } from './storage/domains/projects/base.js';
 import { QueueHealthStorage } from './storage/domains/queue-health/base.js';
 import { SourceControlStorage } from './storage/domains/source-control/base.js';
 import { WorkItemsStorage } from './storage/domains/work-items/base.js';
+import type { WorkItemRow } from './storage/domains/work-items/base.js';
 import { timedPhase } from './timing.js';
 import { createWorkspaceFactory, FactoryWorkspaceRegistry } from './workspace.js';
 
@@ -566,6 +568,16 @@ export class MastraFactory {
           rules,
           storage: workItemsStorage,
           ...(onTerminalStage ? { onTerminalStage } : {}),
+          ...(githubIntegration
+            ? {
+                onAccepted: (args: { orgId: string; factoryProjectId: string; item: WorkItemRow }) =>
+                  reconcileGithubAcceptanceLabels(
+                    githubIntegration,
+                    sourceControlStorage.forIntegration(githubIntegration.id),
+                    args,
+                  ),
+              }
+            : {}),
         })
       : undefined;
     const projectRoutes = new ProjectRoutes({
