@@ -848,7 +848,10 @@ export class FactoryDecisionDispatcher {
       },
       reuseMode: 'preserve',
     });
-    if (!result.item.parentWorkItemId && parentWorkItemId) {
+    // A re-evaluation for an already-filed card (poll/reconcile re-emitting
+    // "opened") resolves the card itself as the triggering item; it is not
+    // its own parent.
+    if (!result.item.parentWorkItemId && parentWorkItemId && parentWorkItemId !== result.item.id) {
       const item = await this.#storage.setParentWorkItemIfMissing({
         orgId: record.orgId,
         id: result.item.id,
@@ -856,6 +859,25 @@ export class FactoryDecisionDispatcher {
         parentWorkItemId,
       });
       if (item) result = { ...result, item };
+    }
+    if (!result.created) {
+      // Backfill source facts (e.g. sourceCreatedAt) that older cards were filed
+      // without. Fill-only: never overwrite, and never adopt the card as
+      // materialized by this decision.
+      const missing = Object.fromEntries(
+        Object.entries(decision.metadata ?? {}).filter(
+          ([key]) => key !== FACTORY_RULE_MATERIALIZATION_KEY && result.item.metadata?.[key] === undefined,
+        ),
+      );
+      if (Object.keys(missing).length > 0) {
+        const filled = await this.#storage.update({
+          orgId: record.orgId,
+          id: result.item.id,
+          userId: 'factory-rule-dispatcher',
+          patch: { metadata: missing },
+        });
+        if (filled) result = { ...result, item: filled.item };
+      }
     }
     const materializedByDecision = result.item.metadata?.[FACTORY_RULE_MATERIALIZATION_KEY] === record.idempotencyKey;
     if (!materializedByDecision && (decision.stage === 'intake' || !result.item.stages.includes('intake'))) return;
