@@ -1,5 +1,17 @@
 # @mastra/factory
 
+## 0.12.0-alpha.11
+
+### Minor Changes
+
+- Session start checks for the `.mastra-sandbox/setup` marker beside the checkout and skips the setup command when the marker holds the sha256 digest of the project's current setup command. Sandboxes booted from a warm repo template carry the marker already; setup runs once when it is missing or stale and writes the marker afterwards. ([#22837](https://github.com/mastra-ai/mastra/pull/22837))
+
+### Patch Changes
+
+- Updated dependencies [[`c1d3422`](https://github.com/mastra-ai/mastra/commit/c1d3422e8052a4282e8547df914b6231e5345f01), [`4596348`](https://github.com/mastra-ai/mastra/commit/45963483f4cd2810f0646469916f74266a3dd607), [`e8aca33`](https://github.com/mastra-ai/mastra/commit/e8aca339dc92c0b60baad3d948a7c48ec9ae106f), [`19b71cf`](https://github.com/mastra-ai/mastra/commit/19b71cf1de8afe6f69a3171d8a5a28086790e49b)]:
+  - @mastra/core@1.64.0-alpha.6
+  - @mastra/code-sdk@1.6.0-alpha.8
+
 ## 0.12.0-alpha.10
 
 ### Patch Changes

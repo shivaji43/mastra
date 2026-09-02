@@ -1,5 +1,17 @@
 # @mastra/core
 
+## 1.64.0-alpha.6
+
+### Patch Changes
+
+- Fixed approval event delivery for function-form `toolDisplay` in streaming channels. A function-form `toolDisplay` now receives `approval` events when `streaming: true`, matching static mode. Return `{ kind: 'post', message }` to replace the built-in approval card; `undefined`, blank, or `stream` results fall back to the built-in card so the approval stays actionable. ([#22832](https://github.com/mastra-ai/mastra/pull/22832))
+
+- Fixed per-tool `requireApproval` functions (`needsApprovalFn`) receiving no context on durable agents and `agent.network()`. They now get the same `{ requestContext, workspace }` second argument as `stream()`/`generate()`, so approval logic that reads the request context works consistently. On durable agents the request context is restored from the persisted run snapshot when the check runs in another process or after a resume. Fixes #22491 ([#22841](https://github.com/mastra-ai/mastra/pull/22841))
+
+- Fixed workspace skill discovery silently reporting zero skills when the workspace filesystem is mis-wired. Invalid-argument errors (Node `ERR_INVALID_ARG*`, e.g. a non-string path handed to the skill source) now surface from refresh() instead of being logged as an inaccessible skills path warning. Genuine access failures and network errors keep the warn-and-continue behavior. Closes https://github.com/mastra-ai/mastra/issues/22639 ([#22823](https://github.com/mastra-ai/mastra/pull/22823))
+
+- Fixed `listResolved()` on versioned storage domains issuing one version query per listed entity. `@mastra/core` adds an overridable `getVersions(ids)` method that `listResolved()` uses to fetch all active versions in a single batch; adapters that don't override it keep their previous per-id behavior. `@mastra/pg` and `@mastra/libsql` override it for the agents and skills domains with a single `WHERE id IN (...)` query. Fixes https://github.com/mastra-ai/mastra/issues/22524 ([#22828](https://github.com/mastra-ai/mastra/pull/22828))
+
 ## 1.64.0-alpha.5
 
 ### Patch Changes
