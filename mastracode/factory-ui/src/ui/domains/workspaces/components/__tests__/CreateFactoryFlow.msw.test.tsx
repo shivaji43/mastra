@@ -6,7 +6,7 @@
  * and quitting halfway leaves nothing on the server — until the model step
  * commits the whole thing.
  */
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -144,6 +144,38 @@ describe('Create Factory wizard', () => {
     expect(await screen.findByRole('heading', { name: 'Choose your codebase' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /octo\/hello/ })).toBeInTheDocument();
     expect(screen.queryByLabelText('Loading repositories')).not.toBeInTheDocument();
+  });
+
+  it('debounces repository searches before requesting filtered results', async () => {
+    const queries: string[] = [];
+    server.use(
+      http.get(`${TEST_BASE_URL}/web/factory/projects`, () => HttpResponse.json({ projects: [] })),
+      http.get(`${TEST_BASE_URL}/web/github/status`, () => HttpResponse.json(connectedGithub)),
+      http.get(`${TEST_BASE_URL}/web/github/repos`, ({ request }) => {
+        queries.push(new URL(request.url).searchParams.get('q') ?? '');
+        return HttpResponse.json({ repos: [repo] });
+      }),
+    );
+    const user = userEvent.setup();
+
+    const { client } = renderFlow();
+
+    await screen.findByRole('heading', { name: 'Name your new Factory' });
+    await waitForMutationsIdle(client);
+    expect(queries).toEqual(['']);
+    await user.type(await screen.findByLabelText('Factory name'), 'Mastra{Enter}');
+    const search = await screen.findByLabelText('Search repositories');
+    await waitForMutationsIdle(client);
+    expect(queries.length).toBeGreaterThanOrEqual(2);
+    queries.splice(0);
+
+    const deliberateUser = userEvent.setup({ delay: 350 });
+    await deliberateUser.type(search, 'jal');
+
+    expect(queries).toEqual([]);
+    await act(() => new Promise(resolve => setTimeout(resolve, 800)));
+    await waitForMutationsIdle(client);
+    expect(queries).toEqual(['jal']);
   });
 
   it('submits the typed name with Enter', async () => {
