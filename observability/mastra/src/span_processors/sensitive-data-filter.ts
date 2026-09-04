@@ -113,7 +113,7 @@ export class SensitiveDataFilter implements SpanOutputProcessor {
 
   /**
    * Process a span by filtering sensitive data across its key fields.
-   * Fields processed: attributes, metadata, input, output, errorInfo.
+   * Fields processed: attributes, metadata, input, output, errorInfo, requestContext.
    *
    * @param span - The input span to filter
    * @returns A new span with sensitive values redacted
@@ -125,6 +125,7 @@ export class SensitiveDataFilter implements SpanOutputProcessor {
     span.input = this.tryFilter(span.input, indexedState);
     span.output = this.tryFilter(span.output, indexedState);
     span.errorInfo = this.tryFilter(span.errorInfo, indexedState);
+    span.requestContext = this.tryFilter(span.requestContext, indexedState);
     return span;
   }
 
