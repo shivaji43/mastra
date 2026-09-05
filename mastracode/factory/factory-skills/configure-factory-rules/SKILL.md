@@ -12,18 +12,26 @@ Help the user change Factory policy in the typed deployment configuration. Facto
 1. Search for `new MastraFactory`, `defaultFactoryRules`, and the `rules` property.
 2. Read the existing rule configuration and its tests before editing.
 3. Import rule helpers and types from the same local Factory module used by the deployment.
-4. If the deployment doesn't configure `rules`, start with `defaultFactoryRules({ version, overrides })` and pass the result to `MastraFactory`.
+4. For board, tool, or Linear rules, start with `defaultFactoryRules({ version, overrides })` if needed and pass the result to `MastraFactory`. For GitHub rules, configure the installed GitHub integration constructor directly.
 
 Do not guess a file path. Factory deployments can assemble `MastraFactory` from different entry points.
 
 ## Preserve the public shape
 
-Use one rules tree:
+Use the global rules tree for board, tool, and Linear handlers:
 
 - `work.<stage>.<source>.onEnter` or `onExit`
 - `review.<stage>.<source>.onEnter` or `onExit`
 - `tools.<toolName>.onResult`
-- `github.<event>.onEvent`
+- `linear.<event>.onEvent`
+
+Configure GitHub on the installed `GithubIntegration` or `PlatformGithubIntegration` constructor instead:
+
+```typescript
+new PlatformGithubIntegration({ rules: { issueCommentCreated: null } });
+```
+
+GitHub integrations exclusively own their event handlers; configure them through constructor `rules[event]`, not the global Factory rules tree. A function replaces the default, `null` disables that event's handler, and omitted or `undefined` values retain defaults. Constructors validate names and handler values, then copy and freeze the effective map per instance. Disabling a handler does not disable webhook authentication or reconciliation bookkeeping.
 
 Do not create an `actions` config or execute authoritative policy in React. Each handler returns one typed `FactoryRuleDecision` or `undefined`.
 
@@ -35,7 +43,7 @@ An override replaces the exact handler leaf. It does not compose with the built-
 
 Before replacing a built-in leaf:
 
-1. Read the built-in handler in `src/web/factory/rules/defaults.ts`.
+1. Find and read the built-in handler: GitHub handlers live in `src/integrations/github/default-rules.ts` within the Factory package; global defaults live in `src/rules/defaults.ts`.
 2. Decide whether the replacement must preserve part of that behavior explicitly.
 3. Use only fields exposed by the typed context. Do not reach into Factory storage or raw webhook payloads.
 4. Return `undefined` to allow the ingress with no decision, or return a typed rejection or bounded structured decision.

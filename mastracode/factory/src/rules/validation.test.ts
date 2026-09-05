@@ -250,7 +250,8 @@ describe('Factory rule validation', () => {
         ...rules,
         github: { madeUpEvent: { onEvent: () => undefined } },
       }),
-    ).toThrow(/GitHub event is invalid/i);
+    ).toThrow(/unsupported field/i);
+    expect(() => assertFactoryRules({ ...rules, github: undefined })).toThrow(/unsupported field/i);
     expect(() =>
       assertFactoryRules({
         ...rules,
