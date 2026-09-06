@@ -90,7 +90,7 @@ export function MessageBubble({
   const message = { ...entry.message, content: { ...entry.message.content, parts } };
   const hasRenderablePart = written.some(part => draws(part, suspensions, entry.runtimeTools));
 
-  const toolGroups = collectToolGroups(parts, suspensions, entry.runtimeTools, groupable);
+  const toolGroups = collectToolGroups(parts, suspensions, entry.runtimeTools, groupable, entry.message.createdAt);
   const origin = channelOrigin(entry.message);
   const author = messageAuthor(entry.message);
   const sender = author && author.id !== viewerId ? author : undefined;
@@ -173,7 +173,7 @@ export function MessageBubble({
       if (toolGroups.memberIds.has(toolCallId)) return null;
 
       const runtime = entry.runtimeTools?.[toolCallId];
-      const tool = toolFromInvocationPart(part, runtime);
+      const tool = toolFromInvocationPart(part, runtime, entry.message.createdAt);
       const suspension = suspensions.get(tool.toolCallId);
       return (
         <Arriving>

@@ -24,6 +24,8 @@ export interface ToolCall {
   result?: unknown;
   /** Appended shell stdout/stderr for shell-style tools. */
   output: string;
+  /** Epoch ms the call began: the persisted part's stamp, or when the live `tool_start` arrived. */
+  createdAt?: number;
 }
 
 /**
@@ -323,7 +325,13 @@ function applyEvent(state: TranscriptState, event: AgentControllerEvent, viewerI
       return withTool(
         state,
         event.toolCallId,
-        t => ({ ...t, toolName: event.toolName, args: event.args, status: 'running' }),
+        t => ({
+          ...t,
+          toolName: event.toolName,
+          args: event.args,
+          status: 'running',
+          createdAt: t.createdAt ?? Date.now(),
+        }),
         {
           toolName: event.toolName,
           args: event.args,
@@ -1188,6 +1196,7 @@ function toolCallFromPart(part: MastraMessagePart | undefined): ToolCall | undef
     status: invocation.state === 'result' ? 'done' : 'running',
     result: 'result' in invocation ? invocation.result : undefined,
     output: '',
+    createdAt: part.createdAt,
   };
 }
 
