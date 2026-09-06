@@ -6873,6 +6873,7 @@ export type ProviderModelsMap = {
     'databricks/databricks-gpt-oss-120b@eu',
     'databricks/databricks-gpt-oss-20b',
     'databricks/databricks-gpt-oss-20b@eu',
+    'databricks/databricks-inkling',
     'deepinfra/ByteDance/Seed-2.0-code',
     'deepinfra/ByteDance/Seed-2.0-mini',
     'deepinfra/deepseek-ai/DeepSeek-R1',
