@@ -5356,6 +5356,8 @@
       "name": "Privatemode AI",
       "models": [
         "deepseek-ocr-2",
+        "glm-5.3",
+        "glm-latest",
         "gpt-oss-120b",
         "kimi-k2.6",
         "kimi-latest",
@@ -5617,6 +5619,7 @@
       "npm": "@ai-sdk/deepinfra",
       "deprecatedModels": [
         "MiniMaxAI/MiniMax-M2.5",
+        "moonshotai/Kimi-K2.5",
         "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5",
         "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning"
       ]
@@ -14053,6 +14056,8 @@
     "klokintegration": ["Kloker", "Kloker-Integration-Architect", "Kloker-Integration-Developer"],
     "privatemode-ai": [
       "deepseek-ocr-2",
+      "glm-5.3",
+      "glm-latest",
       "gpt-oss-120b",
       "kimi-k2.6",
       "kimi-latest",

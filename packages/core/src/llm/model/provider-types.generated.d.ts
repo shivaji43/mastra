@@ -4335,6 +4335,8 @@ export type ProviderModelsMap = {
   readonly klokintegration: readonly ['Kloker', 'Kloker-Integration-Architect', 'Kloker-Integration-Developer'];
   readonly 'privatemode-ai': readonly [
     'deepseek-ocr-2',
+    'glm-5.3',
+    'glm-latest',
     'gpt-oss-120b',
     'kimi-k2.6',
     'kimi-latest',
