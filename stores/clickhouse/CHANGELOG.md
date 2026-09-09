@@ -1,5 +1,46 @@
 # @mastra/clickhouse
 
+## 1.18.0-alpha.0
+
+### Minor Changes
+
+- Added ClickHouse trace filtering by richer same-span properties, including model, duration, outcome, identity, and lineage. ([#23018](https://github.com/mastra-ai/mastra/pull/23018))
+
+  ```ts
+  await mastraClient.queryTraces({
+    timeRange: { from: '2026-08-01T00:00:00.000Z', to: '2026-08-08T00:00:00.000Z' },
+    where: { spans: { some: { op: 'in', value: { path: 'provider' }, set: ['openai'] } } },
+  });
+  ```
+
+- Added ClickHouse support for top-level metadata predicates in advanced trace queries. ([#23027](https://github.com/mastra-ai/mastra/pull/23027))
+
+  ```ts
+  await mastraClient.queryTraces({
+    timeRange: {
+      from: '2026-08-01T00:00:00.000Z',
+      to: '2026-08-08T00:00:00.000Z',
+    },
+    where: { op: 'exists', path: 'metadata.protocolVersion' },
+  });
+  ```
+
+- Added ClickHouse support for richer score predicates in advanced trace queries. ([#22956](https://github.com/mastra-ai/mastra/pull/22956))
+
+  ```ts
+  await mastraClient.queryTraces({
+    timeRange: { from: '2026-08-01T00:00:00.000Z', to: '2026-08-08T00:00:00.000Z' },
+    where: {
+      scores: { some: { op: 'gte', left: { path: 'timestamp' }, right: { literal: '2026-08-01T00:00:00.000Z' } } },
+    },
+  });
+  ```
+
+### Patch Changes
+
+- Updated dependencies [[`bb09e86`](https://github.com/mastra-ai/mastra/commit/bb09e860dd6c510365f0d7ab068b194707e99fa4), [`2efa6ba`](https://github.com/mastra-ai/mastra/commit/2efa6bab6dde4e77e21adf1a9d59e8e44710194b), [`7865a79`](https://github.com/mastra-ai/mastra/commit/7865a79253be403bd79a307224c9968d98ea0b72), [`de5db60`](https://github.com/mastra-ai/mastra/commit/de5db6055519fd22d1673a2ad90e69d1b45ac54d)]:
+  - @mastra/core@1.66.0-alpha.1
+
 ## 1.17.0
 
 ### Minor Changes
