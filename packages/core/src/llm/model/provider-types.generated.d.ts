@@ -4959,6 +4959,7 @@ export type ProviderModelsMap = {
     'google/gemini-flash-lite-latest',
     'google/gemma-4-26b-a4b-it',
     'google/gemma-4-31b-it',
+    'meta/llama-3.1-70b-instruct',
     'meta/llama-3.1-8b-instruct',
     'meta/llama-3.3-70b-instruct',
     'meta/muse-spark-1.1',
@@ -6839,6 +6840,14 @@ export type ProviderModelsMap = {
     'nomic-embed-text',
   ];
   readonly edenai: readonly [
+    'amazon/amazon.nova-lite-v1:0',
+    'amazon/amazon.nova-lite-v1:0@us',
+    'amazon/amazon.nova-micro-v1:0',
+    'amazon/amazon.nova-micro-v1:0@us',
+    'amazon/amazon.nova-pro-v1:0',
+    'amazon/amazon.nova-pro-v1:0@us',
+    'amazon/mistral.pixtral-large-2502-v1:0',
+    'amazon/mistral.pixtral-large-2502-v1:0@us',
     'amazon/moonshot.kimi-k2-thinking',
     'amazon/moonshotai.kimi-k2.5',
     'amazon/zai.glm-4.7-flash',
