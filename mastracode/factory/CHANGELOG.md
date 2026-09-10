@@ -1,5 +1,33 @@
 # @mastra/factory
 
+## 0.14.0-alpha.2
+
+### Minor Changes
+
+- Added incident.io Intake integrations for direct API keys and Mastra Platform connections. ([#23327](https://github.com/mastra-ai/mastra/pull/23327))
+
+  **Intake**
+
+  - Import incidents and follow-ups onto any installed board, including custom boards.
+  - Include status, severity, ownership, labels, descriptions, and incident metadata on imported items.
+  - Refresh imported items when provider state changes.
+
+  **API client**
+
+  - Added typed read access to actions, incident updates, alerts, escalations, catalog data, teams, schedules, and policy findings.
+
+  ```typescript
+  import { IncidentioIntegration } from '@mastra/factory/integrations/incidentio/integration';
+
+  const integration = new IncidentioIntegration({ apiKey: process.env.INCIDENT_IO_API_KEY });
+  ```
+
+### Patch Changes
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f)]:
+  - @mastra/core@1.66.0-alpha.2
+  - @mastra/code-sdk@1.7.1-alpha.2
+
 ## 0.13.1-alpha.1
 
 ### Patch Changes

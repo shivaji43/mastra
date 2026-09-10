@@ -1,5 +1,28 @@
 # @mastra/server
 
+## 1.66.0-alpha.2
+
+### Patch Changes
+
+- Added DELETE /api/observability/feedback and DELETE /api/observability/scores routes for deleting feedback and score records by id, gated behind the observability-signal-deletion core feature and the observability:delete permission. ([#22558](https://github.com/mastra-ai/mastra/pull/22558))
+
+  ```typescript
+  await fetch(`${baseUrl}/api/observability/feedback`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedbackIds: ['feedback-1'] }),
+  });
+
+  await fetch(`${baseUrl}/api/observability/scores`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scoreIds: ['score-1'], organizationId: 'org-1' }),
+  });
+  ```
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f)]:
+  - @mastra/core@1.66.0-alpha.2
+
 ## 1.66.0-alpha.1
 
 ### Minor Changes

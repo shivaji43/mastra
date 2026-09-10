@@ -1,5 +1,19 @@
 # @mastra/clickhouse
 
+## 1.18.0-alpha.1
+
+### Patch Changes
+
+- Added observability feedback and score deletion. ClickHouse records deletion requests and immediately hides matching rows with lightweight deletes. Physical removal requires a configured observability retention period, which open-source deployments don't enable by default. Rows in the short-lived delta tables aren't touched and expire within two days. ([#22558](https://github.com/mastra-ai/mastra/pull/22558))
+
+  ```typescript
+  await observability.deleteFeedback({ feedbackIds: ['feedback-1'] });
+  await observability.deleteScores({ scoreIds: ['score-1'], organizationId: 'org-1' });
+  ```
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f)]:
+  - @mastra/core@1.66.0-alpha.2
+
 ## 1.18.0-alpha.0
 
 ### Minor Changes

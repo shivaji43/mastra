@@ -1,5 +1,19 @@
 # @mastra/duckdb
 
+## 1.8.0-alpha.1
+
+### Patch Changes
+
+- Added observability feedback and score deletion by id, with optional organization and resource filters. ([#22558](https://github.com/mastra-ai/mastra/pull/22558))
+
+  ```typescript
+  await observability.deleteFeedback({ feedbackIds: ['feedback-1'] });
+  await observability.deleteScores({ scoreIds: ['score-1'], resourceId: 'resource-1' });
+  ```
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f)]:
+  - @mastra/core@1.66.0-alpha.2
+
 ## 1.8.0-alpha.0
 
 ### Minor Changes

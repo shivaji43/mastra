@@ -1,5 +1,14 @@
 # @mastra/code-sdk
 
+## 1.7.1-alpha.2
+
+### Patch Changes
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f), [`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9)]:
+  - @mastra/core@1.66.0-alpha.2
+  - @mastra/pg@1.24.0-alpha.2
+  - @mastra/duckdb@1.8.0-alpha.1
+
 ## 1.7.1-alpha.1
 
 ### Patch Changes

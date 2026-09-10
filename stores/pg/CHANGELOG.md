@@ -1,5 +1,25 @@
 # @mastra/pg
 
+## 1.24.0-alpha.2
+
+### Patch Changes
+
+- Added observability feedback and score deletion by id, with optional scope predicates. ([#22558](https://github.com/mastra-ai/mastra/pull/22558))
+
+  ```typescript
+  import { ObservabilityStoragePostgresVNext } from '@mastra/pg';
+
+  const observability = new ObservabilityStoragePostgresVNext({
+    connectionString: process.env.OBSERVABILITY_DATABASE_URL!,
+  });
+
+  await observability.deleteFeedback({ feedbackIds: ['feedback-1'] });
+  await observability.deleteScores({ scoreIds: ['score-1'], organizationId: 'org-1' });
+  ```
+
+- Updated dependencies [[`4d72bce`](https://github.com/mastra-ai/mastra/commit/4d72bceaf323dfe617a882b80defb2ab21b97ed9), [`1fc8225`](https://github.com/mastra-ai/mastra/commit/1fc82255bdca4340a7e0fd42aa61a97359d6c87f)]:
+  - @mastra/core@1.66.0-alpha.2
+
 ## 1.24.0-alpha.1
 
 ### Minor Changes
