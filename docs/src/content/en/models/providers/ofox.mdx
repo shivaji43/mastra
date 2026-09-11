@@ -7,7 +7,7 @@ description: "Browse Ofox model IDs, capabilities, context windows, and pricing.
 
 # <img src="https://models.dev/logos/ofox.svg" alt="Ofox logo" className="inline w-8 h-8 mr-2 align-middle dark:invert dark:brightness-0 dark:contrast-200" />Ofox
 
-Access 137 Ofox models through Mastra's model router. Authentication is handled automatically using the `OFOX_API_KEY` environment variable.
+Access 143 Ofox models through Mastra's model router. Authentication is handled automatically using the `OFOX_API_KEY` environment variable.
 
 Learn more in the [Ofox documentation](https://ofox.ai/docs).
 
@@ -490,6 +490,18 @@ Mastra uses the OpenAI-compatible `/chat/completions` endpoint. Some provider-sp
     "outputCost": 1.32
   },
   {
+    "model": "ofox/deepseek/deepseek-v4-flash-0423",
+    "imageInput": false,
+    "audioInput": false,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": true,
+    "contextWindow": 1000000,
+    "maxOutput": 384000,
+    "inputCost": 0.44,
+    "outputCost": 1.32
+  },
+  {
     "model": "ofox/deepseek/deepseek-v4-flash-0731",
     "imageInput": false,
     "audioInput": false,
@@ -677,6 +689,18 @@ Mastra uses the OpenAI-compatible `/chat/completions` endpoint. Some provider-sp
     "toolUsage": true,
     "reasoning": true,
     "contextWindow": 1048576,
+    "maxOutput": 65536,
+    "inputCost": 0.75,
+    "outputCost": 3.75
+  },
+  {
+    "model": "ofox/google/gemini-3.8-flash",
+    "imageInput": true,
+    "audioInput": true,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": true,
+    "contextWindow": 1000000,
     "maxOutput": 65536,
     "inputCost": 0.75,
     "outputCost": 3.75
@@ -1112,6 +1136,54 @@ Mastra uses the OpenAI-compatible `/chat/completions` endpoint. Some provider-sp
     "maxOutput": 128000,
     "inputCost": 10,
     "outputCost": 50
+  },
+  {
+    "model": "ofox/qwen/qwen-flash",
+    "imageInput": false,
+    "audioInput": false,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": true,
+    "contextWindow": 1000000,
+    "maxOutput": 32000,
+    "inputCost": 0.022,
+    "outputCost": 0.22
+  },
+  {
+    "model": "ofox/qwen/qwen-max",
+    "imageInput": false,
+    "audioInput": false,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": false,
+    "contextWindow": 32000,
+    "maxOutput": 8000,
+    "inputCost": 0.35,
+    "outputCost": 1.38
+  },
+  {
+    "model": "ofox/qwen/qwen-plus",
+    "imageInput": false,
+    "audioInput": false,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": false,
+    "contextWindow": 1000000,
+    "maxOutput": 32000,
+    "inputCost": 0.12,
+    "outputCost": 0.29
+  },
+  {
+    "model": "ofox/qwen/qwen-turbo",
+    "imageInput": false,
+    "audioInput": false,
+    "videoInput": false,
+    "toolUsage": true,
+    "reasoning": false,
+    "contextWindow": 128000,
+    "maxOutput": 16000,
+    "inputCost": 0.05,
+    "outputCost": 0.09
   },
   {
     "model": "ofox/qwen/qwen-vl-max",
