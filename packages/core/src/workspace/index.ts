@@ -79,6 +79,11 @@ export type {
   ListOptions,
   RemoveOptions,
   CopyOptions,
+  WalkEntry,
+  WalkOptions,
+  FilesystemGrepOptions,
+  FilesystemGrepMatch,
+  FilesystemGrepResult,
 } from './filesystem';
 
 // Mount types (provider-specific configs are in their respective packages)
