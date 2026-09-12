@@ -1,11 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import type { Event, EventCallback } from '@mastra/core/events';
-import { createClient } from 'redis';
-import type { RedisClientType } from 'redis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RedisStreamsPubSub } from './index';
+import { createClient } from './client';
+import type { ValkeyClientType } from './client';
+import { ValkeyStreamsPubSub } from './index';
 
-const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6381';
+const VALKEY_URL = process.env.VALKEY_URL ?? 'valkey://localhost:6381';
+
+// Lets individual tests wrap the clients the pubsub creates (to slow down or
+// intercept a command) without reaching into private fields.
+const hooks = vi.hoisted(() => ({ wrap: undefined as undefined | ((client: any) => any) }));
+vi.mock('./client', async importOriginal => {
+  const mod = await importOriginal<typeof import('./client')>();
+  return {
+    ...mod,
+    createClient: (options: Parameters<typeof mod.createClient>[0]) => {
+      const client = mod.createClient(options);
+      return hooks.wrap ? hooks.wrap(client) : client;
+    },
+  };
+});
 
 function makeEvent(overrides: Partial<Omit<Event, 'id' | 'createdAt'>> = {}): Omit<Event, 'id' | 'createdAt'> {
   return { type: 'test', data: {}, runId: 'run-1', ...overrides };
@@ -22,14 +36,34 @@ async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<voi
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-describe('RedisStreamsPubSub reclaim loop', () => {
-  let pubsubs: RedisStreamsPubSub[] = [];
+async function rawClient(): Promise<ValkeyClientType> {
+  const raw = createClient({ url: VALKEY_URL });
+  await raw.connect();
+  return raw;
+}
+
+async function xLen(raw: ValkeyClientType, key: string): Promise<number> {
+  return Number(await raw.command(['XLEN', key]));
+}
+
+/** ID of the newest stream entry. GLIDE decodes XREVRANGE entries as `{ key, value }` records. */
+async function xLastId(raw: ValkeyClientType, key: string): Promise<string> {
+  const [last] = (await raw.command(['XREVRANGE', key, '+', '-', 'COUNT', '1'])) as Array<{ key: string }>;
+  return last!.key;
+}
+
+async function xClaimForce(raw: ValkeyClientType, key: string, group: string, consumer: string, id: string) {
+  await raw.command(['XCLAIM', key, group, consumer, '0', id, 'FORCE']);
+}
+
+describe('ValkeyStreamsPubSub reclaim loop', () => {
+  let pubsubs: ValkeyStreamsPubSub[] = [];
 
   function createPubSub(
     extra: { inFlightTimeoutMs?: number; maxDeliveryAttempts?: number; reclaimIdleMs?: number } = {},
-  ): RedisStreamsPubSub {
-    const ps = new RedisStreamsPubSub({
-      url: REDIS_URL,
+  ): ValkeyStreamsPubSub {
+    const ps = new ValkeyStreamsPubSub({
+      url: VALKEY_URL,
       blockMs: 200,
       // Aggressive settings so a reclaim pass is a few hundred ms, not 60s.
       reclaimIdleMs: 200,
@@ -41,7 +75,7 @@ describe('RedisStreamsPubSub reclaim loop', () => {
   }
 
   afterEach(async () => {
-    vi.restoreAllMocks();
+    hooks.wrap = undefined;
     await Promise.all(pubsubs.map(p => p.close()));
     pubsubs = [];
   });
@@ -66,19 +100,17 @@ describe('RedisStreamsPubSub reclaim loop', () => {
   });
 
   it('does not redeliver during the ack-time settlement window', async () => {
-    // The in-flight guard must be cleared only AFTER Redis settles the entry.
+    // The in-flight guard must be cleared only AFTER the entry is settled.
     // Slow down xAck on every client so the window between ack() being called
     // and the entry leaving the PEL spans several reclaim ticks.
-    const realCreate = createClient;
-    vi.spyOn(await import('redis'), 'createClient').mockImplementation(((opts: any) => {
-      const client = realCreate(opts) as RedisClientType;
+    hooks.wrap = client => {
       const origXAck = client.xAck.bind(client);
-      (client as any).xAck = async (...args: Parameters<typeof origXAck>) => {
+      client.xAck = async (...args: Parameters<typeof origXAck>) => {
         await sleep(500);
         return origXAck(...args);
       };
       return client;
-    }) as any);
+    };
 
     const ps = createPubSub();
     const topic = `t-${randomUUID()}`;
@@ -118,15 +150,14 @@ describe('RedisStreamsPubSub reclaim loop', () => {
     // would be reset on each tick and never reach reclaimIdleMs for B.
     await sleep(700);
 
-    const raw = createClient({ url: REDIS_URL }) as RedisClientType;
-    await raw.connect();
+    const raw = await rawClient();
     try {
-      const [pending] = await raw.xPendingRange(`mastra:topic:${topic}`, group, '-', '+', 10);
+      const [pending] = await raw.xPendingRange(`mastra:topic:${topic}`, group, 10);
       expect(pending).toBeDefined();
       // Never re-claimed by A: idle time kept running and the delivery
       // counter still reflects the single original XREADGROUP delivery.
-      expect(Number(pending!.millisecondsSinceLastDelivery)).toBeGreaterThanOrEqual(600);
-      expect(Number(pending!.deliveriesCounter)).toBe(1);
+      expect(pending!.millisecondsSinceLastDelivery).toBeGreaterThanOrEqual(600);
+      expect(pending!.deliveriesCounter).toBe(1);
     } finally {
       await raw.quit();
     }
@@ -165,12 +196,10 @@ describe('RedisStreamsPubSub reclaim loop', () => {
     await sleep(800);
     expect(attempts).toEqual([1, 2, 3]);
 
-    const raw = createClient({ url: REDIS_URL }) as RedisClientType;
-    await raw.connect();
+    const raw = await rawClient();
     try {
       // Every attempt was settled: nothing left pending in the group.
-      const pending = await raw.xPendingRange(`mastra:topic:${topic}`, group, '-', '+', 10);
-      expect(pending).toHaveLength(0);
+      expect(await raw.xPendingRange(`mastra:topic:${topic}`, group, 10)).toHaveLength(0);
     } finally {
       await raw.quit();
     }
@@ -247,13 +276,11 @@ describe('RedisStreamsPubSub reclaim loop', () => {
     // no longer exists (XCLAIM FORCE re-adds an acked entry to the PEL).
     await ps.publish(topic, makeEvent({ type: 'ghost' }));
     await waitFor(() => ghostDeliveries === 1, 5000);
-    const raw = createClient({ url: REDIS_URL }) as RedisClientType;
-    await raw.connect();
+    const raw = await rawClient();
     try {
-      const [last] = await raw.xRevRange(streamKey, '+', '-', { COUNT: 1 });
-      await raw.xClaim(streamKey, group, 'ghost-consumer', 0, [last!.id], { FORCE: true });
-      const pendingBefore = await raw.xPendingRange(streamKey, group, '-', '+', 1000);
-      expect(pendingBefore).toHaveLength(IN_FLIGHT + 1);
+      const lastId = await xLastId(raw, streamKey);
+      await xClaimForce(raw, streamKey, group, 'ghost-consumer', lastId);
+      expect(await raw.xPendingRange(streamKey, group, 1000)).toHaveLength(IN_FLIGHT + 1);
     } finally {
       await raw.quit();
     }
@@ -304,12 +331,11 @@ describe('RedisStreamsPubSub reclaim loop', () => {
     expect(attemptsA).toEqual([1]);
     expect(attemptsB).toEqual([1]);
 
-    const raw = createClient({ url: REDIS_URL }) as RedisClientType;
-    await raw.connect();
+    const raw = await rawClient();
     try {
       // B's ack settled the only entry; nothing republished, nothing pending.
-      expect(await raw.xPendingRange(streamKey, group, '-', '+', 10)).toHaveLength(0);
-      expect(await raw.xLen(streamKey)).toBe(1);
+      expect(await raw.xPendingRange(streamKey, group, 10)).toHaveLength(0);
+      expect(await xLen(raw, streamKey)).toBe(1);
     } finally {
       await raw.quit();
     }
@@ -317,9 +343,9 @@ describe('RedisStreamsPubSub reclaim loop', () => {
 
   it('does not republish or xAck when a sibling claims the entry inside the timeout settlement', async () => {
     // The tightest possible race: the sibling's XCLAIM lands after the timeout
-    // path has decided to nack but before the nack reaches Redis. A separate
-    // ownership check followed by republish+xAck would still lose here; the
-    // settlement must verify ownership and settle in one atomic Redis step.
+    // path has decided to nack but before the nack reaches the server. A
+    // separate ownership check followed by republish+xAck would still lose
+    // here; the settlement must verify ownership and settle in one atomic step.
     //
     // Simulate it by intercepting the write client's script call and moving
     // the entry to a sibling immediately before it is sent.
@@ -327,24 +353,21 @@ describe('RedisStreamsPubSub reclaim loop', () => {
     const group = `atomic-${randomUUID()}`;
     const streamKey = `mastra:topic:${topic}`;
 
-    const raw = createClient({ url: REDIS_URL }) as RedisClientType;
-    await raw.connect();
+    const raw = await rawClient();
 
     let claimedInWindow = 0;
-    const realCreate = createClient;
-    vi.spyOn(await import('redis'), 'createClient').mockImplementation(((opts: any) => {
-      const client = realCreate(opts) as RedisClientType;
+    hooks.wrap = client => {
       const origEval = client.eval.bind(client);
-      (client as any).eval = async (...args: Parameters<typeof origEval>) => {
-        const [pending] = await raw.xPendingRange(streamKey, group, '-', '+', 1);
+      client.eval = async (...args: Parameters<typeof origEval>) => {
+        const [pending] = await raw.xPendingRange(streamKey, group, 1);
         if (pending) {
-          await raw.xClaim(streamKey, group, 'sibling', 0, [pending.id], { FORCE: true });
+          await xClaimForce(raw, streamKey, group, 'sibling', pending.id);
           claimedInWindow++;
         }
         return origEval(...args);
       };
       return client;
-    }) as any);
+    };
 
     const ps = createPubSub({ inFlightTimeoutMs: 300, reclaimIdleMs: 60_000 });
     const attempts: number[] = [];
@@ -362,8 +385,8 @@ describe('RedisStreamsPubSub reclaim loop', () => {
 
       expect(attempts).toEqual([1]);
       // Nothing republished, and the sibling still owns the untouched entry.
-      expect(await raw.xLen(streamKey)).toBe(1);
-      const pending = await raw.xPendingRange(streamKey, group, '-', '+', 10);
+      expect(await xLen(raw, streamKey)).toBe(1);
+      const pending = await raw.xPendingRange(streamKey, group, 10);
       expect(pending).toHaveLength(1);
       expect(pending[0]!.consumer).toBe('sibling');
       expect(claimedInWindow).toBe(1);
