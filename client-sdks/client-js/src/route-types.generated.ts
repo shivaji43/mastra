@@ -3606,6 +3606,8 @@ type Shared_Type_65 = {
   traceQueryTenantScope: boolean;
   /** Advanced thread queries (POST /observability/threads/query) */
   threadQuery: boolean;
+  /** Feedback endpoints (/observability/feedback and /observability/feedback/*). Unsupported feedback routes return 501. */
+  feedback: boolean;
 };
 
 type Shared_Type_66 = {
