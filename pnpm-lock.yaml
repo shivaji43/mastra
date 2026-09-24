@@ -5270,12 +5270,6 @@ importers:
       onnxruntime-node:
         specifier: 1.26.0
         version: 1.26.0
-      progress:
-        specifier: ^2.0.3
-        version: 2.0.3
-      tar:
-        specifier: 7.5.21
-        version: 7.5.21
     devDependencies:
       '@internal/ai-sdk-v4':
         specifier: workspace:*
@@ -5295,9 +5289,6 @@ importers:
       '@types/node':
         specifier: 22.19.15
         version: 22.19.15
-      '@types/progress':
-        specifier: ^2.0.7
-        version: 2.0.7
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 4.1.11(vitest@4.1.11)
@@ -21562,9 +21553,6 @@ packages:
 
   '@types/prismjs@1.26.5':
     resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
-
-  '@types/progress@2.0.7':
-    resolution: {integrity: sha512-iadjw02vte8qWx7U0YM++EybBha2CQLPGu9iJ97whVgJUT5Zq9MjAPYUnbfRI2Kpehimf1QjFJYxD0t8nqzu5w==}
 
   '@types/pumpify@1.4.4':
     resolution: {integrity: sha512-+cWbQUecD04MQYkjNBhPmcUIP368aloYmqm+ImdMKA8rMpxRNAhZAD6gIj+sAVTF1DliqrT/qUp6aGNi/9U3tw==}
@@ -46920,10 +46908,6 @@ snapshots:
   '@types/pidusage@2.0.5': {}
 
   '@types/prismjs@1.26.5': {}
-
-  '@types/progress@2.0.7':
-    dependencies:
-      '@types/node': 22.19.15
 
   '@types/pumpify@1.4.4':
     dependencies:
