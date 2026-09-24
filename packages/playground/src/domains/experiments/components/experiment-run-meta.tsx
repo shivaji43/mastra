@@ -1,7 +1,7 @@
 import type { DatasetExperiment } from '@mastra/client-js';
 import { DataKeysAndValues } from '@mastra/playground-ui/components/DataKeysAndValues';
 import { Txt } from '@mastra/playground-ui/components/Txt';
-import { formatCompact, formatCost } from '@mastra/playground-ui/domains/metrics/components/metrics-utils';
+import { formatCompactNumber, formatCost } from '@mastra/playground-ui/utils/cost';
 import { formatDate } from '@mastra/playground-ui/utils/date-format';
 import { formatDuration } from '@mastra/playground-ui/utils/duration';
 import { formatRelativeTime } from '@mastra/playground-ui/utils/relative-time';
@@ -106,7 +106,7 @@ export function ExperimentRunMeta({ experiment, metrics }: ExperimentRunMetaProp
               <span className="text-muted-foreground">—</span>
             ) : (
               <>
-                <span>{formatCompact(metrics.data.totalTokens)}</span>
+                <span>{formatCompactNumber(metrics.data.totalTokens)}</span>
                 {metrics.data.estimatedCost != null && (
                   <span className="text-muted-foreground">
                     · {formatCost(metrics.data.estimatedCost, metrics.data.costUnit)}

@@ -10,11 +10,11 @@ import {
 } from '../trace-list-columns';
 import type { TraceColumnPreferences, TraceCustomColumn, TraceUsageSummary } from '../trace-list-columns';
 import { getInputPreview, getSpanDurationMs } from '../utils/span-utils';
-import { formatCompact, formatCost } from '@/domains/metrics/components/metrics-utils';
 import { DataList, DataListSkeleton, TracesDataList, useDataListKeyboard } from '@/ds/components/DataList';
 import type { DataListSort } from '@/ds/components/DataList';
 import { DropdownMenu } from '@/ds/components/DropdownMenu';
 import { Txt } from '@/ds/components/Txt/Txt';
+import { formatCompactNumber, formatCost } from '@/lib/cost';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/utils/duration';
 
@@ -292,19 +292,19 @@ export function TracesListView({
                 )}
                 {hasTraceColumn(columnPreferences, 'inputTokens') && (
                   <DataList.NumberCell>
-                    {usage?.inputTokens === undefined ? undefined : formatCompact(usage.inputTokens)}
+                    {usage?.inputTokens === undefined ? undefined : formatCompactNumber(usage.inputTokens)}
                   </DataList.NumberCell>
                 )}
                 {hasTraceColumn(columnPreferences, 'outputTokens') && (
                   <DataList.NumberCell>
-                    {usage?.outputTokens === undefined ? undefined : formatCompact(usage.outputTokens)}
+                    {usage?.outputTokens === undefined ? undefined : formatCompactNumber(usage.outputTokens)}
                   </DataList.NumberCell>
                 )}
                 {hasTraceColumn(columnPreferences, 'totalTokens') && (
                   <DataList.NumberCell>
                     {(() => {
                       const total = sumTokens(usage);
-                      return total === undefined ? undefined : formatCompact(total);
+                      return total === undefined ? undefined : formatCompactNumber(total);
                     })()}
                   </DataList.NumberCell>
                 )}
