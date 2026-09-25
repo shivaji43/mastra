@@ -19,7 +19,8 @@ import { createRecentRequests } from './recent-requests';
 import { createMessageSignal, createSignal, resolveDeliveryAttributes } from './signals';
 import type { AgentMessageInput, AgentStateSignalInput, CreatedAgentSignal } from './signals';
 import { applyStateSignal } from './state-signals';
-import { createThreadHistoryFilter, stampPartProducedAt } from './thread-history';
+import { createThreadHistoryFilter, getPartProducedAt, stampPartProducedAt } from './thread-history';
+import { onThreadMessagesSaved } from './thread-saves';
 import type {
   AgentAbortThreadOptions,
   AgentClaimThreadPeerOptions,
@@ -49,8 +50,12 @@ import type {
 const AGENT_THREAD_KEY_SEPARATOR = '\u0000';
 const AGENT_THREAD_STREAM_TOPIC_PREFIX = 'agent.thread-stream';
 const AGENT_THREAD_OWNER_DISCOVERY_TOPIC = 'agent.thread-owner-discovery';
+/** Safety margin when trimming up to a retained run, covering clock skew between us and the pubsub backend. */
 const AGENT_THREAD_OWNER_DISCOVERY_TIMEOUT_MS = 100;
 const AGENT_THREAD_OWNER_ACCEPTANCE_TIMEOUT_MS = 5_000;
+// Long enough for live subscribers (including cross-process readers polling the
+// topic) to read a failed run's outcome before its entries are deleted.
+const FAILED_RUN_TRIM_DELAY_MS = 30_000;
 const AGENT_THREAD_PEER_DISCOVERY_TOPIC = 'agent.thread-peer-discovery';
 const AGENT_THREAD_PEER_DISCOVERY_TIMEOUT_MS = 100;
 
@@ -409,6 +414,8 @@ type AgentThreadStreamRuntimeEvent =
       sourceId: string;
       /** Epoch ms the part was produced; publishing can lag behind it. */
       producedAt?: number;
+      /** Kept by save-time trims; removed only when the whole run is trimmed. */
+      pinned?: boolean;
     }
   | {
       type: 'run-completed';
@@ -1449,6 +1456,7 @@ export class AgentThreadStreamRuntime {
           runId,
           error: message,
         });
+        this.#trimFailedRun(pubsub, key, { agent: owner.agent, streamOptions: streamOptions ?? {}, runId });
         if (!(await this.#drainPendingIdleSignals(state, pubsub, key, runId))) {
           this.#releaseThreadLease(pubsub, key, runId);
         }
@@ -1629,10 +1637,16 @@ export class AgentThreadStreamRuntime {
     pubsub: PubSub | undefined,
     key: string,
     streamId: string,
+    resumed = false,
   ) {
     const runtime = this;
 
     const parts: unknown[] = [];
+    // Parts already dropped from the front of `parts`; reader positions are absolute.
+    let dropped = 0;
+    let published = 0;
+    const readers = new Set<{ index: number }>();
+    let startPart: unknown;
     const waiters = new Set<() => void>();
     let started = false;
     let done = false;
@@ -1657,7 +1671,22 @@ export class AgentThreadStreamRuntime {
       for (const waiter of pending) waiter();
     };
 
-    const emitPart = async (rawPart: unknown) => {
+    let needsStart = resumed;
+    const emitPart = async (rawPart: unknown): Promise<void> => {
+      if (needsStart) {
+        needsStart = false;
+        // A resumed half of a run doesn't emit its own `start`, and the first
+        // half's is dropped once saved. Open the resumed half so subscribers
+        // (and joiners) see the run running again.
+        if ((rawPart as { type?: string } | null | undefined)?.type !== 'start') {
+          await emitPart({
+            type: 'start',
+            runId: output.runId,
+            from: ChunkFrom.AGENT,
+            payload: { messageId: output.messageId },
+          });
+        }
+      }
       if (rawPart && typeof rawPart === 'object' && 'type' in rawPart) {
         const typedPart = rawPart as { type?: string; payload?: { toolCallId?: string; toolName?: string } };
         if (typedPart.type === 'tool-call-approval' || typedPart.type === 'tool-call-suspended') {
@@ -1672,6 +1701,8 @@ export class AgentThreadStreamRuntime {
       const producedAt = getChunkProducedAt(rawPart) ?? Date.now();
       stampPartProducedAt(part, producedAt);
       parts.push(part);
+      if ((part as { type?: string } | null | undefined)?.type === 'start') startPart = part;
+      const partType = (part as { type?: string } | null | undefined)?.type;
       await runtime.#publishAndWait(pubsub, key, {
         type: 'stream-part',
         runId: output.runId,
@@ -1679,7 +1710,14 @@ export class AgentThreadStreamRuntime {
         part,
         sourceId: runtime.#getSourceId(),
         producedAt,
+        // `start` and prompts stay on the topic until the run is trimmed as a
+        // whole, so a subscriber joining mid-run still sees the run begin.
+        ...(partType === 'start' || partType === 'tool-call-approval' || partType === 'tool-call-suspended'
+          ? { pinned: true }
+          : {}),
       });
+      published++;
+      if (savedAt !== undefined) trimSaved();
       wake();
       // An error chunk settles `_waitUntilFinished()` without closing
       // `fullStream` (durable error-recovery keeps consuming), so the pump can
@@ -1772,16 +1810,80 @@ export class AgentThreadStreamRuntime {
       await broadcastFinished;
     };
 
+    // Messages saved mid-run (e.g. at each step) already hold every part up to
+    // the last finished step: drop those parts from the topic and, once every
+    // open reader has passed them, from this buffer.
+    // Latest save not yet fully trimmed; publishing can lag behind the save.
+    let savedAt: number | undefined;
+    let trimmedThrough = -1;
+    const trimSaved = () => {
+      if (savedAt === undefined) return;
+      let cutoff = -1;
+      let cutoffAt: number | undefined;
+      for (let i = dropped; i < published; i++) {
+        const part = parts[i - dropped] as { type?: string } | undefined;
+        const at = getPartProducedAt(part);
+        if (at === undefined || at > savedAt) {
+          // Saves at a step's end (savePerStep) start before its step-finish is
+          // produced: every part of the step is saved, only the marker is newer.
+          if (at !== undefined && part?.type === 'step-finish' && i > cutoff + 1) {
+            cutoff = i;
+            cutoffAt = at;
+          }
+          savedAt = undefined;
+          break;
+        }
+        if (part?.type === 'step-finish') {
+          cutoff = i;
+          cutoffAt = at;
+        }
+      }
+      if (cutoffAt === undefined || cutoff <= trimmedThrough) return;
+      trimmedThrough = cutoff;
+      void runtime.#getPubSub(pubsub)
+        .trimTopic(runtime.#threadTopic(key), { runId: output.runId, producedBefore: cutoffAt })
+        .catch(() => {});
+      let keep = cutoff + 1;
+      for (const reader of readers) keep = Math.min(keep, reader.index);
+      for (let i = dropped; i < keep; i++) {
+        const type = (parts[i - dropped] as { type?: string } | undefined)?.type;
+        if (type === 'tool-call-approval' || type === 'tool-call-suspended') {
+          keep = i;
+          break;
+        }
+      }
+      if (keep > dropped) {
+        parts.splice(0, keep - dropped);
+        dropped = keep;
+      }
+    };
+    const { threadId: savedThreadId, resourceId: savedResourceId } = runtime.#parseThreadKey(key);
+    const stopSaveListener = onThreadMessagesSaved({ threadId: savedThreadId, resourceId: savedResourceId }, at => {
+      savedAt = Math.max(savedAt ?? at, at);
+      trimSaved();
+    });
+    void broadcastFinished.then(stopSaveListener);
+
     const createStream = () => {
-      let index = 0;
+      // A subscriber that joins late starts after parts already dropped as
+      // saved, but still gets the run's `start`.
+      const reader = { index: dropped };
+      let pendingStart = dropped > 0 ? startPart : undefined;
       let closed = false;
       let waiter: (() => void) | undefined;
+      readers.add(reader);
       return new ReadableStream({
         async pull(controller) {
           start();
           while (!closed) {
-            if (index < parts.length) {
-              controller.enqueue(parts[index++]);
+            if (pendingStart !== undefined) {
+              controller.enqueue(pendingStart);
+              pendingStart = undefined;
+              return;
+            }
+            if (reader.index < dropped) reader.index = dropped;
+            if (reader.index - dropped < parts.length) {
+              controller.enqueue(parts[reader.index++ - dropped]);
               return;
             }
             if (error) {
@@ -1789,6 +1891,7 @@ export class AgentThreadStreamRuntime {
               return;
             }
             if (done) {
+              readers.delete(reader);
               controller.close();
               return;
             }
@@ -1804,6 +1907,7 @@ export class AgentThreadStreamRuntime {
         },
         cancel() {
           closed = true;
+          readers.delete(reader);
           if (waiter) {
             waiters.delete(waiter);
             waiter();
@@ -2254,7 +2358,17 @@ export class AgentThreadStreamRuntime {
         }
         this.#releaseThreadLease(pubsub, key, runId);
         // The signal this run rebroadcasts is persisted by definition.
-        this.#publish(pubsub, key, { type: 'run-completed', runId, streamId, persisted: true, status: 'success' });
+        // The signal this run rebroadcasts is persisted by definition, so once
+        // run-completed lands its entries can leave the topic.
+        void this.#publishAndWait(pubsub, key, {
+          type: 'run-completed',
+          runId,
+          streamId,
+          persisted: true,
+          status: 'success',
+        })
+          .then(() => this.#getPubSub(pubsub).trimTopic(this.#threadTopic(key), { runId }))
+          .catch(() => {});
       }, 0);
     });
   }
@@ -2407,7 +2521,7 @@ export class AgentThreadStreamRuntime {
       startBroadcast,
       canContinueBroadcast,
       broadcastFinished,
-    } = this.#withBroadcastStream(output, pubsub, key, streamId);
+    } = this.#withBroadcastStream(output, pubsub, key, streamId, streamSeq > 1);
     const resumedToolCallId = (streamOptions as AgentExecutionOptions<OUTPUT> & { toolCallId?: string }).toolCallId;
     if (resumedToolCallId) {
       this.#clearSuspendedToolCall(state, output.runId, resumedToolCallId);
@@ -2521,7 +2635,7 @@ export class AgentThreadStreamRuntime {
       cancelBroadcast,
       canContinueBroadcast,
       broadcastFinished,
-    } = this.#withBroadcastStream(output, pubsub, key, streamId);
+    } = this.#withBroadcastStream(output, pubsub, key, streamId, streamSeq > 1);
     const record: AgentThreadRunRecord<OUTPUT> = {
       agent,
       output: outputForSubscribers,
@@ -2701,16 +2815,27 @@ export class AgentThreadStreamRuntime {
       // cleanup above stays immediate.
       void Promise.resolve(record.broadcastFinished).then(() => {
         if (isDisabled?.()) return;
-        this.#publish(pubsub, key, {
+        // Suspended runs save their messages too, so their parts are backed by
+        // storage; only a successful run leaves nothing actionable to trim.
+        const persisted = record.output.status === 'success' || record.output.status === 'suspended';
+        void this.#publishAndWait(pubsub, key, {
           type: 'run-completed',
           runId: record.runId,
           streamId: record.streamId,
           // Origin-side truth for replay filtering: only a successful run flushed
           // its messages to storage, so only its retained chunks are backed by a
           // persisted message and safe to replay to fresh subscribers.
-          persisted: record.output.status === 'success',
+          persisted,
           status: record.output.status,
-        });
+        })
+          .then(() =>
+            record.output.status === 'success'
+              ? this.#trimSavedRun(pubsub, key, record)
+              : record.output.status !== 'suspended'
+                ? this.#trimFailedRun(pubsub, key, record)
+                : undefined,
+          )
+          .catch(() => {});
         if (this.#hasPendingThreadWork(state, key)) {
           void this.#drainPendingSignals(state, pubsub, key, record);
         } else {
@@ -2718,6 +2843,40 @@ export class AgentThreadStreamRuntime {
         }
       });
     });
+  }
+
+  /**
+   * Once a run saved successfully and the agent has storage, delete every topic
+   * entry published with its runId. Matching by runId (not tracked entry IDs)
+   * also removes entries published before a restart, e.g. the suspended half of
+   * a resumed run. Other runs' entries are never touched.
+   */
+  async #trimSavedRun(
+    pubsub: PubSub | undefined,
+    key: string,
+    record: Pick<AgentThreadRunRecord<any>, 'agent' | 'streamOptions' | 'runId'>,
+  ) {
+    // Without storage the topic is the only copy, so it stays.
+    const memory = await record.agent.getMemory?.({ requestContext: record.streamOptions.requestContext });
+    if (!memory) return;
+    await this.#getPubSub(pubsub).trimTopic(this.#threadTopic(key), { runId: record.runId });
+  }
+
+  /**
+   * A run that failed, was canceled, or was aborted saved nothing that its
+   * topic entries could be replayed against, so reconnecting subscribers ignore
+   * them. They only matter to subscribers already reading the run live, so
+   * delete them once those have had time to read the outcome.
+   */
+  #trimFailedRun(
+    pubsub: PubSub | undefined,
+    key: string,
+    record: Pick<AgentThreadRunRecord<any>, 'agent' | 'streamOptions' | 'runId'>,
+  ) {
+    const timer = setTimeout(() => {
+      this.#trimSavedRun(pubsub, key, record).catch(() => {});
+    }, FAILED_RUN_TRIM_DELAY_MS);
+    timer.unref?.();
   }
 
   async #drainPendingSignals(
@@ -2846,6 +3005,9 @@ export class AgentThreadStreamRuntime {
         error: `failed to start follow-up run for queued message: ${getErrorFromUnknown(err).message}${draining?.cancelled ? '; the message was cancelled' : '; the message was requeued and will deliver on the next turn'}`,
       });
       if (previousRun.runId !== failedRunId) {
+        this.#trimFailedRun(pubsub, key, { ...previousRun, runId: failedRunId });
+      }
+      if (previousRun.runId !== failedRunId) {
         // A synchronous throw from the lease transfer leaves the lease still
         // owned by the finished previous run with its renewal timer alive,
         // which would hold the key forever. Release it unconditionally before
@@ -2960,6 +3122,7 @@ export class AgentThreadStreamRuntime {
           runId: pending.runId,
           error: getErrorFromUnknown(err).message,
         });
+        this.#trimFailedRun(pubsub, key, { ...pending, streamOptions: pending.streamOptions ?? {} });
         // Hand the lease to remaining queued work (transfer keeps the key from
         // going empty); only release once nothing is left to drain.
         void this.#drainPendingContinuations(state, pubsub, key, pending.runId).then(async started => {
@@ -3048,6 +3211,7 @@ export class AgentThreadStreamRuntime {
         runId: pendingIdle.runId,
         error: getErrorFromUnknown(err).message,
       });
+      this.#trimFailedRun(pubsub, key, { ...pendingIdle, streamOptions: pendingIdle.streamOptions ?? {} });
       if (!(await this.#drainPendingIdleSignals(state, pubsub, key, fromRunId))) {
         this.#releaseThreadLease(pubsub, key, fromRunId ?? pendingIdle.runId);
       }
@@ -3129,6 +3293,7 @@ export class AgentThreadStreamRuntime {
         runId: pendingIdle.runId,
         error: getErrorFromUnknown(err).message,
       });
+      this.#trimFailedRun(pubsub, key, { ...pendingIdle, streamOptions: pendingIdle.streamOptions ?? {} });
       // No completion watcher exists for a failed startup. Preserve pending-before-idle recovery here too.
       await this.#drainPendingSignals(state, pubsub, key, {
         agent: pendingIdle.agent,
@@ -3855,6 +4020,11 @@ export class AgentThreadStreamRuntime {
     // half's parts; a local run already records which stream it moved to.
     const isAnsweredHalf = (runId: string, streamId: string) => {
       if (answeredStreamIds.has(streamId)) return true;
+      // A run registers a later stream only after this one ended, so its
+      // prompts were answered even if `run-suspended` hasn't arrived yet.
+      const registered = registeredSeqsByRunId.get(runId);
+      const seq = registered?.get(streamId);
+      if (seq !== undefined && [...registered!.values()].some(other => other > seq)) return true;
       const current = state.threadRunsById.get(runId);
       return current !== undefined && current.streamId !== streamId && current.lifecycle !== 'suspended';
     };
@@ -3958,6 +4128,8 @@ export class AgentThreadStreamRuntime {
               continue;
             }
             const run = pendingRuns.shift()!;
+            // A local run can be read before its `run-registered` event arrives.
+            noteRunHalf(run.runId, { streamId: run.streamId, streamSeq: run.streamSeq });
             // Local registered runs expose createSubscriberStream, while remote runs are
             // already per-subscription streams. Do not silently skip locked streams here:
             // a locked fallback stream means a caller is sharing a non-multicast stream.
@@ -3969,6 +4141,9 @@ export class AgentThreadStreamRuntime {
             currentRunRequestContext = run.streamOptions.requestContext;
             if (remoteRuns.has(run.streamId)) startRemoteRunLeaseWatch(run.runId, run.streamId);
             let readerReleased = false;
+            // A `start` covered by stored history is held back and sent before the
+            // first live part of this stream, so a mid-run joiner sees the run begin.
+            let heldStart: unknown;
             try {
               while (true) {
                 const { value: part, done: streamDone } = await reader.read();
@@ -3989,7 +4164,15 @@ export class AgentThreadStreamRuntime {
                   ) &&
                   (!historyFilter || historyFilter(typedPart, run.runId))
                 ) {
+                  const isPrompt =
+                    typedPart?.type === 'tool-call-approval' || typedPart?.type === 'tool-call-suspended';
+                  if (heldStart !== undefined && typedPart?.type !== 'start' && !isPrompt) {
+                    yield heldStart;
+                  }
+                  if (!isPrompt) heldStart = undefined;
                   yield partWithRunId;
+                } else if (typedPart?.type === 'start' && historyFilter && !storedStreamIds.has(run.streamId)) {
+                  heldStart = partWithRunId;
                 }
                 if (done) break;
                 const finishReason = typedPart.finishReason ?? typedPart.payload?.finishReason;
@@ -4671,6 +4854,11 @@ export class AgentThreadStreamRuntime {
           type: 'run-failed',
           runId: reservedRunId,
           error: getErrorFromUnknown(error).message,
+        });
+        this.#trimFailedRun(pubsub, reservedKey, {
+          agent,
+          streamOptions: target.ifIdle?.streamOptions ?? {},
+          runId: reservedRunId,
         });
         void this.#drainPendingIdleSignals(state, pubsub, reservedKey);
         throw error;
