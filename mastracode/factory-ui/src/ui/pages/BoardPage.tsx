@@ -296,7 +296,13 @@ function BoardContent({
       columnFeed,
       feedFailed,
       collapsed:
-        builtin && stage.id !== definition.initialPhase && !loading && !composerOpen && !feedFailed && taskCount === 0,
+        builtin &&
+        stage.id !== definition.initialPhase &&
+        !loading &&
+        !composerOpen &&
+        !feedFailed &&
+        !columnFeed?.hasNextPage &&
+        taskCount === 0,
     };
   });
 
@@ -476,7 +482,7 @@ function BoardContent({
                       />
                     )}
                     {columnFeed && <IntakeFeedNotice source={intake.active} feed={columnFeed} />}
-                    {stage.id === definition.initialPhase && <IntakeColumnExtras feed={columnFeed} />}
+                    {columnFeed && <IntakeColumnExtras feed={columnFeed} currentColumnLength={taskCount} />}
                   </BoardColumn>
                 ),
               )}
