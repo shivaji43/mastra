@@ -5907,6 +5907,12 @@ importers:
 
   packages/playground-ui:
     dependencies:
+      '@autoform/core':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@autoform/react':
+        specifier: ^4.0.0
+        version: 4.0.0(@hookform/resolvers@3.10.0(react-hook-form@7.87.0(react@19.2.7)))(react-hook-form@7.87.0(react@19.2.7))(react@19.2.7)
       '@base-ui/react':
         specifier: ^1.7.0
         version: 1.7.0(@types/react@19.2.17)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -5940,12 +5946,18 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.6
         version: 6.43.6
+      '@dagrejs/dagre':
+        specifier: ^1.1.8
+        version: 1.1.8
       '@hello-pangea/dnd':
         specifier: ^18.0.1
         version: 18.0.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
+      '@lukeed/uuid':
+        specifier: ^2.0.1
+        version: 2.0.1
       '@radix-ui/react-visually-hidden':
         specifier: ^1.2.4
         version: 1.2.4(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -5973,6 +5985,9 @@ importers:
       mdast-util-to-markdown:
         specifier: ^2.1.2
         version: 2.1.2
+      nanoid:
+        specifier: ^5.1.16
+        version: 5.1.16
       prettier:
         specifier: ^3.9.5
         version: 3.9.5
@@ -5982,6 +5997,9 @@ importers:
       react-day-picker:
         specifier: ^8.10.1
         version: 8.10.1(date-fns@4.4.0)(react@19.2.7)
+      react-hook-form:
+        specifier: ^7.81.0
+        version: 7.87.0(react@19.2.7)
       react-markdown:
         specifier: ^9.1.0
         version: 9.1.0(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2)
@@ -6003,15 +6021,15 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      superjson:
+        specifier: ^2.2.6
+        version: 2.2.6
       use-debounce:
         specifier: ^10.1.0
         version: 10.1.1(react@19.2.7)
       zod:
         specifier: ^3.25.0
         version: 3.25.76
-      zustand:
-        specifier: ^5.0.12
-        version: 5.0.13(@types/react@19.2.17)(immer@11.1.9)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
     devDependencies:
       '@internal/lint':
         specifier: workspace:*
@@ -6028,6 +6046,9 @@ importers:
       '@mastra/react':
         specifier: workspace:*
         version: link:../../client-sdks/react
+      '@mastra/schema-compat':
+        specifier: workspace:*
+        version: link:../schema-compat
       '@storybook/addon-a11y':
         specifier: ^10.6.0
         version: 10.6.0(storybook@10.6.0(@types/react@19.2.17)(bufferutil@4.1.0)(prettier@3.9.5)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
@@ -6115,6 +6136,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.7(react@19.2.7)
+      react-router:
+        specifier: ^8.0.0
+        version: 8.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       rollup-plugin-node-externals:
         specifier: ^8.1.2
         version: 8.1.2(rollup@4.62.2)
