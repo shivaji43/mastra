@@ -4,20 +4,12 @@
 import type { ChannelProvider } from '@mastra/core/channels';
 
 import type { ConnectionCredential } from '../client.js';
-import { MastraConnectError } from '../errors.js';
+import { getCredential } from '../client.js';
 
 import type { ChannelProviderRegistration } from './channel-provider.js';
 
 function credentialToken(credential: ConnectionCredential): string {
   return credential.type === 'oauth2' ? credential.accessToken : credential.apiKey;
-}
-
-function missingPeerError(integrationId: string, packageName: string, error: unknown): MastraConnectError {
-  const reason = error instanceof Error ? error.message : String(error);
-  return new MastraConnectError(
-    'invalid_options',
-    `channels() cannot build '${integrationId}' provider: install '${packageName}' as a dependency of your app (${reason}).`,
-  );
 }
 
 /**
@@ -39,7 +31,7 @@ function missingPeerError(integrationId: string, packageName: string, error: unk
  * `providerOptions` (handlers, streaming, commands, handlers, threadContext,
  * inlineMedia, etc.) is forwarded to the provider constructor unchanged.
  */
-const SLACK_RESERVED_KEYS = ['baseUrl', 'refreshToken', 'token', 'encryptionKey'] as const;
+const SLACK_RESERVED_KEYS = ['baseUrl', 'refreshToken', 'token', 'tokenResolver', 'encryptionKey'] as const;
 const TELEGRAM_RESERVED_KEYS = ['baseUrl', 'apiBaseUrl', 'botToken', 'encryptionKey'] as const;
 const DISCORD_RESERVED_KEYS = ['baseUrl', 'encryptionKey'] as const;
 
@@ -78,34 +70,43 @@ function stripReservedOptions<T extends Record<string, unknown> | undefined>(int
 }
 
 /**
- * Slack: wraps `@mastra/slack`'s `SlackProvider`. The platform stores a Slack
- * App Configuration refresh token (`xoxe-1-...`) on the connection credential;
- * `SlackProvider` handles token rotation, per-agent app minting via the
- * manifest API, OAuth install flow, and webhook signature verification (the
- * per-app signing secret is minted at install time via the manifest API and
- * stored on `ChannelsStorage`, not sourced from `providerOptions`).
+ * Slack: wraps `@mastra/slack`'s `SlackProvider`. The platform's credential
+ * vendor (Nango) owns the Slack App Configuration token refresh cycle, so the
+ * provider is constructed with a `tokenResolver` that fetches a fresh access
+ * token from the platform before each manifest API call. `SlackProvider`
+ * never calls `tooling.tokens.rotate` in this mode — rotating the platform's
+ * single-use refresh token locally would burn the vendor's stored copy and
+ * permanently break the connection. The provider still handles per-agent app
+ * minting via the manifest API, OAuth install flow, and webhook signature
+ * verification (the per-app signing secret is minted at install time via the
+ * manifest API and stored on `ChannelsStorage`, not sourced from
+ * `providerOptions`).
  *
  * `providerOptions` is spread into the `SlackProvider` constructor after
- * `refreshToken`; reserved fields (`baseUrl`, `refreshToken`, `token`,
- * `encryptionKey`) are rejected at the type level and stripped at runtime.
- * Non-reserved provider config (default scopes, streaming settings, handlers,
- * inlineMedia, etc.) is forwarded unchanged. See `@mastra/slack`'s
- * `SlackProviderConfig` for the full option surface.
+ * `tokenResolver`; reserved fields (`baseUrl`, `refreshToken`, `token`,
+ * `tokenResolver`, `encryptionKey`) are rejected at the type level and
+ * stripped at runtime. Non-reserved provider config (default scopes,
+ * streaming settings, handlers, inlineMedia, etc.) is forwarded unchanged.
+ * See `@mastra/slack`'s `SlackProviderConfig` for the full option surface.
  */
 const slackChannel: ChannelProviderRegistration = {
   integrationId: 'slack',
-  async build(credential, options) {
-    const refreshToken = credentialToken(credential);
-    let mod: { SlackProvider: new (config: Record<string, unknown>) => ChannelProvider };
-    try {
-      mod = (await import('@mastra/slack')) as {
-        SlackProvider: new (config: Record<string, unknown>) => ChannelProvider;
-      };
-    } catch (error) {
-      throw missingPeerError('slack', '@mastra/slack', error);
-    }
+  async build(credential, options, context) {
+    const mod = (await import('@mastra/slack')) as {
+      SlackProvider: new (config: Record<string, unknown>) => ChannelProvider;
+    };
     const safeOptions = stripReservedOptions('slack', options);
-    return new mod.SlackProvider({ refreshToken, ...(safeOptions ?? {}) });
+    if (context) {
+      const { client, connectionId } = context;
+      const tokenResolver = async (): Promise<string> => {
+        const fresh = await getCredential(client, connectionId);
+        return credentialToken(fresh);
+      };
+      return new mod.SlackProvider({ tokenResolver, ...(safeOptions ?? {}) });
+    }
+    // No build context (direct registration use) — fall back to treating the
+    // credential as a self-managed App Configuration refresh token.
+    return new mod.SlackProvider({ refreshToken: credentialToken(credential), ...(safeOptions ?? {}) });
   },
 };
 
@@ -127,14 +128,9 @@ const telegramChannel: ChannelProviderRegistration = {
   integrationId: 'telegram',
   async build(credential, options) {
     const botToken = credentialToken(credential);
-    let mod: { TelegramProvider: new (config: Record<string, unknown>) => ChannelProvider };
-    try {
-      mod = (await import('@mastra/telegram')) as {
-        TelegramProvider: new (config: Record<string, unknown>) => ChannelProvider;
-      };
-    } catch (error) {
-      throw missingPeerError('telegram', '@mastra/telegram', error);
-    }
+    const mod = (await import('@mastra/telegram')) as {
+      TelegramProvider: new (config: Record<string, unknown>) => ChannelProvider;
+    };
     const safeOptions = stripReservedOptions('telegram', options);
     return new mod.TelegramProvider({ botToken, ...(safeOptions ?? {}) });
   },
@@ -147,13 +143,16 @@ interface DiscordProviderOptions extends Record<string, unknown> {
 
 /**
  * Discord: wraps `@mastra/discord`'s `DiscordProvider`. The platform stores the
- * bot token as the connection credential; `applicationId` + `publicKey` come
- * from the connection's metadata (or a `providerOptions` override on
- * `channels()`). `DiscordProvider` handles per-guild command registration,
- * Ed25519 signature verification, and the invite-URL install flow. Note that
- * Discord's `publicKey` is not a signing secret — it's the public counterpart
- * of the Ed25519 verification pair, so allowing it via `providerOptions` is
- * safe.
+ * bot token as the connection credential — that alone is enough:
+ * `DiscordProvider` backfills `applicationId` and `publicKey` from
+ * `GET /applications/@me` (the application object carries the id and the
+ * Ed25519 `verify_key`). Connection metadata (`applicationId`/`publicKey`,
+ * camelCase or snake_case) or a `providerOptions` override take precedence
+ * over the backfilled values when present. `DiscordProvider` handles per-guild
+ * command registration, Ed25519 signature verification, and the invite-URL
+ * install flow. Note that Discord's `publicKey` is not a signing secret — it's
+ * the public counterpart of the Ed25519 verification pair, so allowing it via
+ * `providerOptions` is safe.
  *
  * `providerOptions` is spread into the `DiscordProvider` constructor after the
  * `app` object; reserved fields (`baseUrl`, `encryptionKey`) are rejected at
@@ -175,30 +174,13 @@ const discordChannel: ChannelProviderRegistration<DiscordProviderOptions> = {
       options?.publicKey ??
       (typeof metadata.publicKey === 'string' ? metadata.publicKey : undefined) ??
       (typeof metadata.public_key === 'string' ? metadata.public_key : undefined);
-    let mod: { DiscordProvider: new (config: Record<string, unknown>) => ChannelProvider };
-    try {
-      mod = (await import('@mastra/discord')) as {
-        DiscordProvider: new (config: Record<string, unknown>) => ChannelProvider;
-      };
-    } catch (error) {
-      throw missingPeerError('discord', '@mastra/discord', error);
-    }
-    // `applicationId` and `publicKey` live on the connection's non-secret
-    // metadata (or in `providerOptions`). If both are missing DiscordProvider
-    // will still construct — its `#suppliedAppConfig()` falls back to
-    // `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` env vars — but the
-    // Ed25519 verification path needs `publicKey` and command registration
-    // needs `applicationId`, so log a warning when they're absent so the
-    // shape mismatch surfaces at startup, not at first inbound interaction.
-    if (!applicationId || !publicKey) {
-      console.warn(
-        `[@mastra/connect] discord channel: missing ${[!applicationId && 'applicationId', !publicKey && 'publicKey']
-          .filter(Boolean)
-          .join(
-            ' + ',
-          )} on the connection. Store them on the connection's metadata or pass them via integrations.discord.providerOptions.`,
-      );
-    }
+    const mod = (await import('@mastra/discord')) as {
+      DiscordProvider: new (config: Record<string, unknown>) => ChannelProvider;
+    };
+    // `applicationId` and `publicKey` are optional overrides from the
+    // connection's non-secret metadata (or `providerOptions`). When absent,
+    // DiscordProvider resolves them itself from `GET /applications/@me` using
+    // the bot token, so no warning is needed.
     // `options` is spread AFTER `app` so an operator can override the app
     // object entirely from `providerOptions.app`, and BEFORE `app` (as
     // top-level fields) so the metadata-derived defaults land in the same
