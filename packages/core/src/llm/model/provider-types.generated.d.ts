@@ -977,6 +977,7 @@ export type ProviderModelsMap = {
     'xiaomi/mimo-v2.5:thinking',
     'xiaomi/mimo-v2.6-flash',
     'xiaomi/mimo-v2.6-flash-uncensored',
+    'xiaomi/mimo-v2.6-flash-uncensored:thinking',
     'xiaomi/mimo-v2.6-pro',
     'xiaomi/mimo-v2.6-pro-ultraspeed',
     'z-ai/GLM-4.5-Air',
