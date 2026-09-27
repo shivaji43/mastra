@@ -716,6 +716,7 @@ export type ProviderModelsMap = {
     'liquid/lfm-2.5-2.6b',
     'longcat-2.0',
     'longcat-2.0:thinking',
+    'longcat-2.5-preview',
     'meganova-ai/manta-flash-1.0',
     'meganova-ai/manta-mini-1.0',
     'meganova-ai/manta-pro-1.0',
