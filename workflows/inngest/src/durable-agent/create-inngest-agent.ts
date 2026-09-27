@@ -36,7 +36,7 @@
  * ```
  */
 
-import type { Agent, AgentExecutionOptions } from '@mastra/core/agent';
+import type { Agent, AgentExecutionOptions, StructuredOutputOptions } from '@mastra/core/agent';
 import {
   AGENT_STREAM_TOPIC,
   agentThreadStreamRuntime,
@@ -968,6 +968,7 @@ export function createInngestAgent<TOutput = undefined>(options: CreateInngestAg
         },
         threadId,
         resourceId,
+        structuredOutput: registryEntry.structuredOutput as StructuredOutputOptions<TOutput> | undefined,
         onChunk: streamOptions?.onChunk,
         onStepFinish: streamOptions?.onStepFinish,
         onFinish: async result => {
@@ -1161,6 +1162,7 @@ export function createInngestAgent<TOutput = undefined>(options: CreateInngestAg
         },
         threadId: resumeOptions?.threadId,
         resourceId: resumeOptions?.resourceId,
+        structuredOutput: existingEntry.structuredOutput as StructuredOutputOptions<TOutput> | undefined,
         onChunk: resumeOptions?.onChunk,
         onStepFinish: resumeOptions?.onStepFinish,
         onFinish: async result => {
@@ -1382,6 +1384,9 @@ export function createInngestAgent<TOutput = undefined>(options: CreateInngestAg
           version: 'v3',
         },
         offset: observeOptions?.offset,
+        structuredOutput: globalRunRegistry.get(runId)?.structuredOutput as
+          | StructuredOutputOptions<TOutput>
+          | undefined,
         onChunk: observeOptions?.onChunk,
         onStepFinish: observeOptions?.onStepFinish,
         onFinish: observeOptions?.onFinish,
