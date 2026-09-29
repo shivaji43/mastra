@@ -114,7 +114,9 @@ import { stateSchema } from './schema.js';
 import type { MastraCodeState } from './schema.js';
 
 import { mastraBrand } from './theme-palette.js';
+import { DiscardingScoresStorage } from './utils/discarding-scores-storage.js';
 import { syncGateways } from './utils/gateway-sync.js';
+import { registerSessionAndWaitForMaintenance, UNKNOWN_OWNER, unregisterSession } from './utils/maintenance-lock.js';
 import {
   detectProject,
   getObservabilityDatabasePath,
@@ -583,9 +585,31 @@ export async function createMastraCodeAgentController(config?: MastraCodeConfig)
     ? undefined
     : ((config?.storage as StorageConfig | undefined) ??
       getStorageConfig(project.rootPath, globalSettings.storage, configDir));
-  const storageResult: StorageResult = injectedStorage
-    ? { storage: injectedStorage, backend: resolveInjectedStorageBackend(injectedStorage, config?.storageBackend) }
-    : await createStorage(storageConfig!);
+  if (!injectedStorage) {
+    // Register first, then check the maintenance lock, so `mastracode prune`
+    // (lock first, then sessions) can never run against an open session.
+    await registerSessionAndWaitForMaintenance({
+      onWait: pid =>
+        console.error(
+          `Waiting for storage maintenance (mastracode prune${pid === UNKNOWN_OWNER ? '' : `, PID ${pid}`}) to finish. Press Ctrl+C to give up.`,
+        ),
+    });
+  }
+  let storageResult: StorageResult;
+  if (injectedStorage) {
+    storageResult = {
+      storage: injectedStorage,
+      backend: resolveInjectedStorageBackend(injectedStorage, config?.storageBackend),
+    };
+  } else {
+    try {
+      storageResult = await createStorage(storageConfig!);
+    } catch (error) {
+      // A still-alive process that failed to open storage must not block prune.
+      unregisterSession();
+      throw error;
+    }
+  }
   const storageWarning = storageResult.warning;
 
   // Observability storage (DuckDB — separate file for OLAP-style trace/score/feedback queries).
@@ -616,6 +640,10 @@ export async function createMastraCodeAgentController(config?: MastraCodeConfig)
   }
 
   const harnessStorage = new InMemoryHarness();
+  // mastracode's scorers persist every result through the scores domain, but
+  // nothing reads scores back. Accept the writes and keep nothing, so they
+  // neither grow mastra.db nor the process heap.
+  const scoresStorage = new DiscardingScoresStorage();
 
   const storage = new MastraCompositeStore({
     id: 'mastra-code-storage',
@@ -625,6 +653,7 @@ export async function createMastraCodeAgentController(config?: MastraCodeConfig)
       // trace/score/feedback writes never fall through to the default libsql store.
       observability: observabilityDomain ?? false,
       harness: harnessStorage,
+      scores: scoresStorage,
     },
   });
 

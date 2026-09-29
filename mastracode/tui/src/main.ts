@@ -367,6 +367,14 @@ async function main() {
     return pluginMain(process.argv.slice(3));
   }
 
+  // Storage maintenance without the TUI, so a database can still be pruned and
+  // compacted when the interactive session won't start. Checked before the
+  // headless branch below, which would otherwise claim `prune --help`.
+  if (process.argv[2] === 'prune') {
+    const { runPruneCommand } = await import('@mastra/code-sdk/utils/prune-cli');
+    return process.exit(await runPruneCommand(process.argv.slice(3)));
+  }
+
   const initialPrompt = takeInitialPrompt(process.argv, process.env);
   if (initialPrompt.error) {
     process.stderr.write(`${initialPrompt.error}\n`);
