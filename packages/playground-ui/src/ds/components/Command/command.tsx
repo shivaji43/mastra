@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/ds/components/Dialog';
 import type { DialogSize } from '@/ds/components/Dialog';
-import { ScrollArea } from '@/ds/components/ScrollArea';
+import { ScrollArea, ScrollAreaViewport } from '@/ds/components/ScrollArea';
 import type { ScrollAreaMask } from '@/ds/components/ScrollArea';
 import { Txt } from '@/ds/components/Txt';
 import { FluidMenuItems, useFluidMenu, useFluidMenuItemRef } from '@/ds/primitives/fluid-menu';
@@ -171,12 +171,8 @@ const CommandList = React.forwardRef<React.ElementRef<typeof CommandPrimitive.Li
     if (!scrollArea) return list;
 
     return (
-      <ScrollArea
-        className={cn('min-h-0', scrollAreaClassName)}
-        viewPortClassName={scrollAreaViewportClassName}
-        mask={scrollAreaMask}
-      >
-        {list}
+      <ScrollArea className={cn('min-h-0', scrollAreaClassName)} mask={scrollAreaMask}>
+        <ScrollAreaViewport className={scrollAreaViewportClassName}>{list}</ScrollAreaViewport>
       </ScrollArea>
     );
   },

@@ -4,7 +4,7 @@ import * as React from 'react';
 import type { ThreadRailTurn } from './thread-rail-turns';
 
 import { useOptionalMessageScroller, useOptionalMessageScrollerVisibility } from '@/ds/components/MessageScroller';
-import { ScrollArea } from '@/ds/components/ScrollArea';
+import { ScrollArea, ScrollAreaViewport } from '@/ds/components/ScrollArea';
 import { Txt } from '@/ds/components/Txt';
 import { overlaySurfaceStyle } from '@/ds/primitives/raised-surface';
 import { useMeasuredAutoHeight } from '@/hooks/use-measured-auto-height';
@@ -187,30 +187,31 @@ export function ThreadRail({
         data-testid="thread-rail-scroll-area"
         maxHeight={maxHeight}
         className={cn('w-8', scrollAreaClassName)}
-        viewPortClassName="pr-3"
       >
-        <div className="flex w-4 flex-col items-start gap-2 py-2">
-          {turns.map((turn, index) => {
-            const distance = hoveredIndex === null ? null : Math.abs(index - hoveredIndex);
-            const active = turn.messageId === activeMessageId;
-            const inView = visibleMessageIdSet.has(turn.messageId);
-            const previewActive = hoveredIndex === index;
+        <ScrollAreaViewport className="pr-3">
+          <div className="flex w-4 flex-col items-start gap-2 py-2">
+            {turns.map((turn, index) => {
+              const distance = hoveredIndex === null ? null : Math.abs(index - hoveredIndex);
+              const active = turn.messageId === activeMessageId;
+              const inView = visibleMessageIdSet.has(turn.messageId);
+              const previewActive = hoveredIndex === index;
 
-            return (
-              <ThreadRailItem
-                key={turn.key}
-                turn={turn}
-                index={index}
-                distance={distance}
-                active={active}
-                inView={inView}
-                previewId={previewActive ? previewId : undefined}
-                onHoverChange={showPreview}
-                onSelect={selectTurn}
-              />
-            );
-          })}
-        </div>
+              return (
+                <ThreadRailItem
+                  key={turn.key}
+                  turn={turn}
+                  index={index}
+                  distance={distance}
+                  active={active}
+                  inView={inView}
+                  previewId={previewActive ? previewId : undefined}
+                  onHoverChange={showPreview}
+                  onSelect={selectTurn}
+                />
+              );
+            })}
+          </div>
+        </ScrollAreaViewport>
       </ScrollArea>
 
       {previewState.currentTurn && (
