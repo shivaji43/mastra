@@ -483,6 +483,10 @@ export function setupAutocomplete(state: TUIState): void {
         ].filter(command => command.value.startsWith(argumentPrefix.toLowerCase())),
     },
     {
+      name: 'schedules',
+      description: 'Create and manage recurring prompts for this thread',
+    },
+    {
       name: 'profile',
       description: 'Control process memory diagnostics',
       getArgumentCompletions: (argumentPrefix: string) =>
